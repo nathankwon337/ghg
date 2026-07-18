@@ -274,6 +274,7 @@
   .sync-status{font-size:12.5px; font-weight:700; color:var(--pine-dark);}
   .sync-status.off{color:var(--ink-soft); font-weight:600;}
   .sync-status.busy{color:var(--slate);}
+  .sync-last{font-size:11.5px; color:var(--ink-soft);}
 
   .filter-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
   .filter-tab{padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:var(--surface); font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-soft);}
@@ -461,6 +462,29 @@ function setSyncConfig(cfg){
 }
 function isNoteSyncEnabled(){ const c = getSyncConfig(); return !!(c.endpoint && c.code); }
 
+// 마지막 동기화 성공 시각 — 페이지를 새로고침해도 남아있도록 localStorage에 영구 저장(기기별)
+const NOTE_SYNC_LAST_KEY = 'ghg_note_sync_last_at';
+function getLastSyncAt(){
+  try{ const v = localStorage.getItem(NOTE_SYNC_LAST_KEY); return v ? Number(v) : null; }
+  catch(e){ return null; }
+}
+function markSyncSuccess(){
+  const now = Date.now();
+  try{ localStorage.setItem(NOTE_SYNC_LAST_KEY, String(now)); }catch(e){ /* ignore */ }
+  return now;
+}
+// "3분 전" 같은 상대 시각 표기. 하루 넘어가면 날짜·시각으로 표시.
+function formatSyncTime(ts){
+  if(!ts) return '';
+  const diff = Date.now() - ts;
+  if(diff < 60*1000) return '방금 전';
+  if(diff < 60*60*1000) return Math.floor(diff/60000) + '분 전';
+  if(diff < 24*60*60*1000) return Math.floor(diff/3600000) + '시간 전';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'.'+pad(d.getMonth()+1)+'.'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+
 // 병합 규칙: 오답횟수는 더 큰 값, 마킹은 둘 중 하나라도 켜져 있으면 유지, 최근오답시각은 더 최근 값.
 // (기기 간 충돌을 최소화하기 위한 단순 "더 큰/더 최신 값 우선" 병합 — gamify.js 캐럿 병합과 동일한 사상)
 function mergeNoteSets(local, remote){
@@ -519,8 +543,21 @@ async function syncNotesNow(){
   await sSet('notes', merged);
   STATE._notesCache = merged;
   await cloudPushNotes();
-  STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at: Date.now()};
+  const at = markSyncSuccess();
+  STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
   refreshSyncUI();
+}
+
+// 자동 주기 동기화: 동기화가 설정되어 있고, 이 탭이 실제로 보이고 있을 때만 5분마다 조용히 동기화.
+// (백그라운드 탭에서 불필요한 네트워크 요청을 하지 않도록 document.visibilityState를 확인)
+let __ghgAutoSyncTimer = null;
+function startAutoSync(){
+  if(__ghgAutoSyncTimer) return;
+  __ghgAutoSyncTimer = setInterval(async () => {
+    if(document.visibilityState !== 'visible') return;
+    if(!isNoteSyncEnabled()) return;
+    await syncNotesNow();
+  }, 5*60*1000); // 5분마다
 }
 
 /* ---------------------- init ---------------------- */
@@ -528,6 +565,7 @@ async function init(){
   const idx = await sGet('qsets_index');
   STATE.sets = idx || [];
   render();
+  startAutoSync();
 }
 
 /* ---------------------- excel parsing ---------------------- */
@@ -1525,7 +1563,8 @@ async function goWrongNote(){
     const merged = mergeNoteSets(local, remote);
     await sSet('notes', merged);
     STATE._notesCache = merged;
-    STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at: Date.now()};
+    const at = markSyncSuccess();
+    STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
   } else {
     STATE._notesCache = await getNotes();
   }
@@ -1647,6 +1686,7 @@ function renderWrongNoteBody(){
             <span>제${s.subject}과목</span>
             <span>#${s.qnum}</span>
             ${n.wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${n.wrongCount}회</span>` : (n.wrongCount>0?`<span class="badge badge-calc">오답 ${n.wrongCount}회</span>`:'')}
+            ${s.topic ? `<span class="badge badge-topic" data-act="startTopicFromBadge" data-topic="${escapeHtml(s.topic)}">🏷 ${escapeHtml(s.topic)}</span>` : ''}
           </div>
           <div class="wrong-item-q">${escapeHtml(s.question_text)}</div>
         </div>
@@ -1665,6 +1705,10 @@ function renderWrongNoteBody(){
     <div class="note-sync-row">
       ${isNoteSyncEnabled() ? `
         <span class="sync-status ${STATE.noteSyncStatus && STATE.noteSyncStatus.state==='syncing' ? 'busy':''}">☁ ${STATE.noteSyncStatus ? escapeHtml(STATE.noteSyncStatus.message) : '동기화 켜짐'}</span>
+        <span class="sync-last">${(() => {
+          const at = (STATE.noteSyncStatus && STATE.noteSyncStatus.at) || getLastSyncAt();
+          return at ? ('마지막 동기화: ' + formatSyncTime(at)) : '아직 동기화 기록 없음';
+        })()}</span>
         <button class="btn btn-sm" data-act="syncNotesNow">지금 동기화</button>
       ` : `<span class="sync-status off">이 기기에만 저장됨 · 다른 기기와 이어보려면 동기화를 설정하세요</span>`}
       <button class="btn btn-sm btn-ghost" data-act="openNoteSync">⚙ 오답노트 동기화 설정</button>
