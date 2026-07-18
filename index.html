@@ -173,6 +173,11 @@
   .progress-fill{height:100%; background:var(--pine); border-radius:99px;}
   .progress-text{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); white-space:nowrap;}
   .navopen-btn{font-family:'IBM Plex Mono',monospace; font-size:12px; white-space:nowrap;}
+  .return-session-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    padding:10px 14px; margin-bottom:12px; background:var(--pine-soft); border:1px solid var(--pine);
+    border-radius:9px; font-size:12.5px; color:var(--pine-dark);
+  }
   .jump-select{
     font-family:'IBM Plex Mono',monospace; font-size:12px; padding:6px 8px; border-radius:7px;
     border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:110px; flex-shrink:0;
@@ -376,6 +381,7 @@ let STATE = {
   sets: [],                // index
   activeSet: null,         // full set object {id,name,questions}
   session: null,           // {mode, sourceType, list:[...], idx}
+  returnSession: null,     // {session, activeSet} — 주제별 모아풀기 등으로 잠시 벗어난 원래 세션을 복귀시키기 위한 보관소
   lastResult: null,
   wrongFilter: 'all',      // all | freq | bookmark
   calcModal: null,         // {steps, stepIdx}
@@ -806,8 +812,21 @@ async function startTopicSession(topic){
     });
   });
   if(!list.length){ alert('해당 주제의 문제를 찾을 수 없습니다.'); render(); return; }
+  // 지금 풀고 있던 세션이 있다면(그리고 아직 되돌아갈 세션을 저장해두지 않았다면) 그대로 보존해둔다.
+  if(STATE.view === 'quiz' && STATE.session && !STATE.returnSession){
+    STATE.returnSession = { session: STATE.session, activeSet: STATE.activeSet };
+  }
   STATE.activeSet = null;
   STATE.session = { mode:'practice', sourceType:'topic', setId:null, setName:'🏷 주제: ' + topic, list, idx:0 };
+  STATE.view = 'quiz';
+  render();
+}
+
+function returnToPreviousSession(){
+  if(!STATE.returnSession) return;
+  STATE.session = STATE.returnSession.session;
+  STATE.activeSet = STATE.returnSession.activeSet;
+  STATE.returnSession = null;
   STATE.view = 'quiz';
   render();
 }
@@ -1263,6 +1282,12 @@ function renderQuiz(){
 
   return `
   <div class="quiz-shell">
+    ${STATE.returnSession ? `
+      <div class="return-session-bar">
+        <span>🏷 잠시 다른 문제를 풀고 있어요 — <b>${escapeHtml(STATE.returnSession.session.setName)}</b>은(는) 그대로 남아있습니다.</span>
+        <button class="btn btn-primary btn-sm" data-act="returnToPreviousSession">◀ 원래 풀던 문제로 돌아가기</button>
+      </div>
+    ` : ''}
     <div class="quiz-progressbar">
       <select class="jump-select" data-act="jumpSelect" aria-label="문제 번호로 건너뛰기">${jumpOptions}</select>
       <div class="progress-track"><div class="progress-fill" style="width:${progressPct}%"></div></div>
@@ -1424,6 +1449,7 @@ function renderResult(){
 
   return `
   <button class="btn btn-ghost btn-sm" data-act="home" style="margin-bottom:16px;">← 세트 목록으로</button>
+  ${STATE.returnSession ? `<button class="btn btn-primary btn-sm" data-act="returnToPreviousSession" style="margin-bottom:16px; margin-left:8px;">◀ ${escapeHtml(STATE.returnSession.session.setName)}(으)로 돌아가기</button>` : ''}
   <div class="page-title">${escapeHtml(r.setName)} — 학습 결과</div>
   <div class="page-sub">${r.mode==='exam'?'실전 모드':'연습 모드'} 채점 결과입니다</div>
 
@@ -1646,7 +1672,7 @@ function escapeHtml(str){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function goHome(){ STATE.view='home'; STATE.activeSet=null; STATE.session=null; render(); }
+function goHome(){ STATE.view='home'; STATE.activeSet=null; STATE.session=null; STATE.returnSession=null; render(); }
 
 /* ---------------------- event binding ---------------------- */
 function bindEvents(){
@@ -1662,6 +1688,7 @@ function bindEvents(){
         case 'overlayCloseTopic': if(e.target === el) closeTopicPicker(); break;
         case 'pickTopic': await startTopicSession(el.getAttribute('data-topic')); break;
         case 'startTopicFromBadge': await startTopicSession(el.getAttribute('data-topic')); break;
+        case 'returnToPreviousSession': returnToPreviousSession(); break;
         case 'openSync': openSync(); break;
         case 'closeUpload': STATE.uploadModal=false; STATE.uploadState=null; render(); break;
         case 'overlayClose': if(e.target === el) { STATE.uploadModal=false; STATE.uploadState=null; render(); } break;
