@@ -43,14 +43,14 @@
 
   /* ---------- top bar ---------- */
   .topbar{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:14px 24px; background:var(--pine-dark); color:#fff;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;
+    padding:12px 16px; background:var(--pine-dark); color:#fff; gap:8px 10px;
     position:sticky; top:0; z-index:40;
   }
-  .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px;}
-  .brand .dot{width:10px;height:10px;border-radius:50%;background:#7FD9A8; box-shadow:0 0 0 3px rgba(127,217,168,.25);}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px; min-width:0;}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:#7FD9A8; box-shadow:0 0 0 3px rgba(127,217,168,.25); flex-shrink:0;}
   .brand small{display:block; font-weight:400; font-size:11.5px; color:#B9D6C4; letter-spacing:.3px;}
-  .topbar-actions{display:flex; gap:10px; align-items:center;}
+  .topbar-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
   .pill{
     font-size:12px; padding:5px 10px; border-radius:999px; background:rgba(255,255,255,.1);
     color:#DDEEE4; font-family:'IBM Plex Mono',monospace;
@@ -167,7 +167,7 @@
   .quiz-progressbar{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
     margin-bottom:12px; padding:10px 14px; background:var(--surface); border:1px solid var(--line);
-    border-radius:9px; position:sticky; top:66px; z-index:10;
+    border-radius:9px; position:sticky; top:60px; z-index:10;
   }
   .progress-track{flex:1; height:6px; background:var(--surface-2); border-radius:99px; overflow:hidden; margin:0 12px;}
   .progress-fill{height:100%; background:var(--pine); border-radius:99px;}
@@ -253,6 +253,12 @@
   .subj-pass{color:var(--ok); font-weight:700;}
 
   /* wrong note */
+  /* wrong note cloud sync */
+  .note-sync-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; padding:10px 14px; background:var(--surface-2); border-radius:9px;}
+  .sync-status{font-size:12.5px; font-weight:700; color:var(--pine-dark);}
+  .sync-status.off{color:var(--ink-soft); font-weight:600;}
+  .sync-status.busy{color:var(--slate);}
+
   .filter-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
   .filter-tab{padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:var(--surface); font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-soft);}
   .filter-tab.active{background:var(--pine); border-color:var(--pine); color:#fff;}
@@ -265,11 +271,75 @@
   .star-btn.on{color:var(--amber);}
 
   footer.note{text-align:center; color:var(--ink-soft); font-size:11.5px; padding:20px; opacity:.7;}
+
+  /* =========================================================================
+     모바일 반응형 정비 (~640px 이하)
+     ========================================================================= */
+  @media (max-width:640px){
+    main{padding:16px 12px 48px;}
+    .page-title{font-size:19px;}
+    .page-sub{font-size:12.5px; margin-bottom:16px;}
+
+    /* 상단바: 타이틀은 한 줄로 압축하고, 자막은 숨겨 두 줄로 넘치지 않게 한다 */
+    .topbar{padding:10px 12px;}
+    .brand{font-size:13.5px; gap:7px;}
+    .brand small{display:none;}
+    .topbar-actions{gap:6px; width:100%; justify-content:flex-start;}
+    .btn-top{padding:8px 11px; font-size:12.5px; gap:4px; flex:1 1 auto; justify-content:center;}
+    .btn-top .ic{font-size:14px;}
+
+    /* 문제 풀이 진행바: 상단바가 두 줄이 될 수 있어 sticky를 끄고 자연스럽게 흘러가게 한다 */
+    .quiz-progressbar{position:static;}
+
+    /* 버튼: 터치 타겟을 넉넉하게, 폭이 좁으면 자연스럽게 줄바꿈 */
+    .btn{padding:10px 14px; font-size:13.5px;}
+    .quiz-footer{flex-direction:column; align-items:stretch; gap:10px;}
+    .quiz-footer-left,.quiz-footer-right{width:100%; justify-content:stretch;}
+    .quiz-footer-left .btn,.quiz-footer-right .btn{flex:1;}
+    .q-top{flex-wrap:wrap; gap:8px;}
+    .q-badges{flex-wrap:wrap;}
+
+    /* 카드/그리드: 한 칼럼으로 */
+    .grid-cards{grid-template-columns:1fr;}
+    .set-card .actions{flex-wrap:wrap;}
+
+    /* 모달: 화면 꽉 채우듯 여백 최소화, 세로 스택 */
+    .overlay{padding:10px; align-items:flex-end;}
+    .modal{max-width:100%; max-height:92vh; border-radius:14px 14px 0 0;}
+    .modal-body{padding:16px;}
+    .modal-head{padding:14px 16px;}
+    .modal-foot{padding:12px 16px; flex-wrap:wrap;}
+    .modal-foot .btn{flex:1; justify-content:center;}
+    .gh-field input, .field-label + input{font-size:16px;} /* iOS 자동 확대 방지 */
+
+    /* 결과 화면: 게이지+텍스트 세로 배치, 과목 표는 가로 스크롤 */
+    .score-hero{flex-direction:column; align-items:flex-start; padding:20px;}
+    .subject-table{display:block; overflow-x:auto; white-space:nowrap;}
+    .bar-track{width:110px;}
+
+    /* 오답노트 */
+    .note-sync-row{flex-direction:column; align-items:flex-start; gap:8px;}
+    .wrong-item-top{flex-wrap:wrap;}
+    .filter-tabs{gap:6px;}
+    .filter-tab{padding:6px 11px; font-size:12px;}
+
+    /* 문항 이동 팝업 그리드는 더 촘촘하게 */
+    .qnav-grid{grid-template-columns:repeat(6,1fr);}
+  }
+  @media (max-width:380px){
+    .qnav-grid{grid-template-columns:repeat(5,1fr);}
+    .btn-top .lbl{display:none;} /* 아주 좁은 화면에서는 아이콘만 표시 */
+    .btn-top{padding:9px;}
+  }
 </style>
 </head>
 <body>
 <div id="app"></div>
 
+<!-- 오답노트 클라우드 동기화용 "웹앱 주소" 기본값 (선택 사항).
+     ghg_config.js 파일이 없어도 앱은 정상 동작하며, 그 경우 사용자가
+     동기화 설정 화면에서 직접 웹앱 주소를 입력할 수 있다. -->
+<script src="ghg_config.js"></script>
 <script>
 /* =========================================================================
    온실가스 관리기사 학습 플랫폼 — single-file app
@@ -304,6 +374,8 @@ let STATE = {
   uploadTab: 'local',      // local | github
   gh: {owner:'', repo:'', path:'', branch:'', files:null, listing:false, loadingFile:null, error:null},
   syncing: false,
+  noteSyncModal: false,     // 오답노트 클라우드 동기화 설정 모달
+  noteSyncStatus: null,     // {state:'idle'|'syncing'|'ok'|'error', message, at}
   toast: null
 };
 
@@ -322,6 +394,107 @@ async function sSet(key, value){
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function qid(setId, subject, qnum){ return setId + '::' + subject + '::' + qnum; }
+
+/* ---------------------- 오답노트 클라우드 동기화 (선택) ----------------------
+   오답노트(전체 오답 / 빈번오답 / 마킹) 데이터는 기본적으로 이 브라우저의 localStorage에만
+   저장되어 다른 기기·브라우저에서는 사라진 것처럼 보인다. 이를 보완하기 위해, 어학학습
+   게임들의 gamify.js와 동일한 패턴(Google Apps Script 웹앱을 아주 단순한 key-value
+   저장소로 사용)으로 "동기화 코드" 하나만 공유하면 여러 기기에서 오답노트를 이어볼 수
+   있게 한다. 완전히 선택 사항이며, 설정하지 않으면 기존과 동일하게 이 기기에만 저장된다.
+
+   웹앱 주소(엔드포인트)는 두 가지 방법으로 넣을 수 있다:
+   1) ghg_config.js 파일에 window.GHG_CLOUD_ENDPOINT = '...' 로 한 번만 넣어두면
+      (gamify_config.js와 동일한 방식) 사이트 전체 기본값이 되어, 접속하는 모든 기기가
+      별도 설정 없이 자동으로 이 주소를 쓴다 — 사용자는 "동기화 코드"만 입력하면 된다.
+   2) ghg_config.js를 안 쓰거나 개인적으로 다른 서버를 쓰고 싶으면, 동기화 설정 화면에서
+      직접 웹앱 주소를 입력할 수 있다 (이 개인 설정이 항상 사이트 기본값보다 우선한다). */
+const NOTE_SYNC_CFG_KEY = 'ghg_note_sync_cfg'; // {endpoint, code} — 개인 설정(선택)
+
+function siteDefaultEndpoint(){
+  return (typeof window.GHG_CLOUD_ENDPOINT === 'string' && window.GHG_CLOUD_ENDPOINT) ? window.GHG_CLOUD_ENDPOINT : '';
+}
+function getPersonalSyncConfig(){
+  try{ const v = localStorage.getItem(NOTE_SYNC_CFG_KEY); return v ? JSON.parse(v) : {endpoint:'', code:''}; }
+  catch(e){ return {endpoint:'', code:''}; }
+}
+// 실제로 사용할 설정: 개인 웹앱 주소 > 사이트 기본값(ghg_config.js). 코드는 항상 개인별로 입력.
+function getSyncConfig(){
+  const personal = getPersonalSyncConfig();
+  return {
+    endpoint: personal.endpoint || siteDefaultEndpoint(),
+    code: personal.code || ''
+  };
+}
+function isUsingSiteDefaultEndpoint(){
+  const personal = getPersonalSyncConfig();
+  return !personal.endpoint && !!siteDefaultEndpoint();
+}
+function setSyncConfig(cfg){
+  try{ localStorage.setItem(NOTE_SYNC_CFG_KEY, JSON.stringify(cfg)); }catch(e){ /* ignore */ }
+}
+function isNoteSyncEnabled(){ const c = getSyncConfig(); return !!(c.endpoint && c.code); }
+
+// 병합 규칙: 오답횟수는 더 큰 값, 마킹은 둘 중 하나라도 켜져 있으면 유지, 최근오답시각은 더 최근 값.
+// (기기 간 충돌을 최소화하기 위한 단순 "더 큰/더 최신 값 우선" 병합 — gamify.js 캐럿 병합과 동일한 사상)
+function mergeNoteSets(local, remote){
+  if(!remote) return local;
+  const merged = {...local};
+  Object.keys(remote).forEach(id => {
+    const r = remote[id];
+    const l = merged[id];
+    if(!l){ merged[id] = r; return; }
+    merged[id] = {
+      wrongCount: Math.max(l.wrongCount||0, r.wrongCount||0),
+      resolved: (l.wrongCount||0) >= (r.wrongCount||0) ? l.resolved : r.resolved,
+      bookmarked: !!(l.bookmarked || r.bookmarked),
+      lastWrongAt: Math.max(l.lastWrongAt||0, r.lastWrongAt||0),
+      snapshot: (r.lastWrongAt||0) > (l.lastWrongAt||0) ? r.snapshot : l.snapshot
+    };
+  });
+  return merged;
+}
+
+async function cloudPushNotes(){
+  const cfg = getSyncConfig();
+  if(!cfg.endpoint || !cfg.code) return;
+  const notes = await getNotes();
+  try{
+    await fetch(cfg.endpoint, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'}, // Apps Script CORS 프리플라이트 회피
+      body: JSON.stringify({code: cfg.code, notes})
+    });
+  }catch(e){ console.error('[note-sync] push failed', e); }
+}
+
+async function cloudPullNotes(){
+  const cfg = getSyncConfig();
+  if(!cfg.endpoint || !cfg.code) return null;
+  try{
+    const res = await fetch(cfg.endpoint + '?action=get&code=' + encodeURIComponent(cfg.code));
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    return (json && json.found) ? json.notes : null;
+  }catch(e){ console.error('[note-sync] pull failed', e); return null; }
+}
+
+// 오답노트 화면에 들어올 때 한 번 호출: 클라우드와 이 기기 데이터를 병합해 양쪽에 동일하게 반영.
+function refreshSyncUI(){
+  if(STATE.view === 'wrongnote') renderWrongNoteBody();
+}
+async function syncNotesNow(){
+  if(!isNoteSyncEnabled()) return;
+  STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
+  refreshSyncUI();
+  const remote = await cloudPullNotes();
+  const local = await getNotes();
+  const merged = mergeNoteSets(local, remote);
+  await sSet('notes', merged);
+  STATE._notesCache = merged;
+  await cloudPushNotes();
+  STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at: Date.now()};
+  refreshSyncUI();
+}
 
 /* ---------------------- init ---------------------- */
 async function init(){
@@ -505,6 +678,7 @@ async function recordAnswer(setId, setName, q, isCorrect){
   }
   notes[id] = cur;
   await sSet('notes', notes);
+  if(isNoteSyncEnabled()) cloudPushNotes();
 }
 
 async function toggleBookmark(setId, q){
@@ -521,6 +695,7 @@ async function toggleBookmark(setId, q){
   notes[id] = cur;
   await sSet('notes', notes);
   render();
+  if(isNoteSyncEnabled()) cloudPushNotes();
 }
 
 async function saveResultHistory(entry){
@@ -676,9 +851,9 @@ function topbar(){
       <div>온실가스 관리기사 학습 플랫폼<small>9월 필기시험 대비 · 기출문제 트레이너</small></div>
     </div>
     <div class="topbar-actions">
-      ${STATE.view!=='home' ? `<button class="btn-top" data-act="home"><span class="ic">📚</span>세트 목록</button>` : ''}
-      <button class="btn-top" data-act="wrongnote"><span class="ic">✏️</span>오답노트</button>
-      <button class="btn-top accent ${STATE.syncing?'syncing':''}" data-act="openSync"><span class="ic ${STATE.syncing?'spin':''}">🔄</span>${STATE.syncing?'동기화 중…':'동기화'}</button>
+      ${STATE.view!=='home' ? `<button class="btn-top" data-act="home"><span class="ic">📚</span><span class="lbl">세트 목록</span></button>` : ''}
+      <button class="btn-top" data-act="wrongnote"><span class="ic">✏️</span><span class="lbl">오답노트</span></button>
+      <button class="btn-top accent ${STATE.syncing?'syncing':''}" data-act="openSync"><span class="ic ${STATE.syncing?'spin':''}">🔄</span><span class="lbl">${STATE.syncing?'동기화 중…':'동기화'}</span></button>
     </div>
   </div>`;
 }
@@ -1151,12 +1326,111 @@ async function renderWrongNoteView(){
 async function goWrongNote(){
   STATE.view = 'wrongnote';
   render();
-  const notes = await getNotes();
-  STATE._notesCache = notes;
+  if(isNoteSyncEnabled()){
+    STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
+    const remote = await cloudPullNotes();
+    const local = await getNotes();
+    const merged = mergeNoteSets(local, remote);
+    await sSet('notes', merged);
+    STATE._notesCache = merged;
+    STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at: Date.now()};
+  } else {
+    STATE._notesCache = await getNotes();
+  }
   renderWrongNoteBody();
 }
 
+function noteSyncModalHTML(){
+  const personal = getPersonalSyncConfig();
+  const siteDefault = siteDefaultEndpoint();
+  const usingSiteDefault = isUsingSiteDefaultEndpoint();
+  return `
+  <div class="overlay" data-act="overlayCloseNoteSync">
+    <div class="modal" data-stop="1" style="max-width:560px;">
+      <div class="modal-head">
+        <h3>☁ 오답노트 클라우드 동기화</h3>
+        <button class="icon-x" data-act="closeNoteSync">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="ok-box" style="margin-bottom:14px;">
+          기본적으로 오답노트(전체 오답 · 빈번오답 · 마킹)는 이 브라우저에만 저장됩니다.
+          ${siteDefault
+            ? '이 사이트는 클라우드 동기화 서버가 이미 설정되어 있습니다 — <b>동기화 코드</b>만 입력하면 됩니다. 다른 기기에서도 같은 코드를 넣으면 오답노트가 자동으로 합쳐져서 이어집니다.'
+            : '아래에 <b>동기화 코드</b>와 <b>웹앱 주소</b>를 한 번만 설정해두면, 다른 기기·브라우저에서 같은 코드를 넣었을 때 오답노트가 자동으로 합쳐져서 이어집니다.'}
+          완전히 선택 사항이며, 비워두면 지금처럼 이 기기에만 저장됩니다.
+        </div>
+        <div class="gh-field"><label>동기화 코드 (아무 기기에서나 동일하게 입력)</label>
+          <input type="text" id="syncCode" placeholder="예: 내이름-2026" value="${escapeHtml(personal.code)}"></div>
+
+        ${siteDefault ? `
+          <div class="gh-field">
+            <label>웹앱 주소</label>
+            <div class="ok-box mono" style="margin-top:0; font-size:11.5px; word-break:break-all;">${escapeHtml(siteDefault)} <span style="font-family:'Gothic A1',sans-serif; font-weight:700;">(사이트 기본값 · ghg_config.js)</span></div>
+          </div>
+          <details style="margin-top:6px; font-size:12px; color:var(--ink-soft);">
+            <summary style="cursor:pointer; font-weight:700; color:var(--ink-soft);">다른 웹앱 주소를 개인적으로 쓰고 싶다면?</summary>
+            <div class="gh-field" style="margin-top:8px;">
+              <input type="text" id="syncEndpoint" placeholder="비워두면 위 사이트 기본값을 사용합니다" value="${escapeHtml(personal.endpoint)}">
+            </div>
+          </details>
+        ` : `
+          <div class="gh-field"><label>웹앱 주소 (Google Apps Script 배포 URL)</label>
+            <input type="text" id="syncEndpoint" placeholder="https://script.google.com/macros/s/.../exec" value="${escapeHtml(personal.endpoint)}"></div>
+        `}
+
+        <details style="margin-top:12px; font-size:12.5px; color:var(--ink-soft);" ${siteDefault?'':'open'}>
+          <summary style="cursor:pointer; font-weight:700; color:var(--pine-dark);">웹앱 주소는 어떻게 만드나요? (처음 한 번만 설정, 5분 소요)</summary>
+          <div style="margin-top:8px; line-height:1.7;">
+            1. <a href="https://sheets.google.com" target="_blank" rel="noopener">sheets.google.com</a>에서 새 스프레드시트를 만듭니다 (다른 학습 게임과 별도로 새로 만들어도 되고, 기존 시트를 재사용해도 됩니다).<br>
+            2. 상단 메뉴 <b>확장 프로그램 → Apps Script</b> 클릭 → 기본 코드를 지우고, 아래 "코드 복사" 내용을 붙여넣습니다.<br>
+            3. 저장 후 <b>배포 → 새 배포 → 웹 앱</b> → 실행 계정은 "나", 액세스 권한은 "전체(Anyone)"로 설정 후 배포합니다.<br>
+            4. 나온 <span class="mono">.../exec</span> 주소를 위 "웹앱 주소" 칸에 붙여넣고 저장하면 끝입니다.<br>
+            5. <b>여러 기기에서 매번 주소를 입력하기 번거롭다면</b>: 이 주소를 <span class="mono">ghg_config.js</span> 파일의 <span class="mono">window.GHG_CLOUD_ENDPOINT</span>에 한 번만 넣고 앱과 같은 폴더에 두면, 그 뒤로는 접속하는 모든 기기가 자동으로 이 주소를 쓰고 동기화 코드만 입력하면 됩니다.
+          </div>
+          <div class="warn-box" style="margin-top:10px; white-space:pre-wrap; font-size:11.5px;">function doGet(e){
+  var code=e.parameter.code, sheet=getSheet_();
+  if(e.parameter.action==='get'){
+    var row=findRow_(sheet,code);
+    return json_(row?{found:true,notes:safeParse_(row[1])}:{found:false});
+  }
+  return json_({error:'unknown action'});
+}
+function doPost(e){
+  var body=JSON.parse(e.postData.contents);
+  if(!body||!body.code) return json_({error:'code required'});
+  var sheet=getSheet_(), data=sheet.getDataRange().getValues(), rowIndex=-1;
+  for(var i=1;i&lt;data.length;i++){ if(data[i][0]===body.code){ rowIndex=i+1; break; } }
+  var json=JSON.stringify(body.notes||{}), now=new Date().toISOString();
+  if(rowIndex===-1) sheet.appendRow([body.code,json,now]);
+  else sheet.getRange(rowIndex,1,1,3).setValues([[body.code,json,now]]);
+  return json_({ok:true});
+}
+function getSheet_(){
+  var ss=SpreadsheetApp.getActiveSpreadsheet(), sheet=ss.getSheetByName('ghg_notes');
+  if(!sheet){ sheet=ss.insertSheet('ghg_notes'); sheet.appendRow(['code','notes','updatedAt']); }
+  return sheet;
+}
+function findRow_(sheet,code){
+  var data=sheet.getDataRange().getValues();
+  for(var i=1;i&lt;data.length;i++){ if(data[i][0]===code) return data[i]; }
+  return null;
+}
+function safeParse_(s){ try{ return JSON.parse(s); }catch(e){ return null; } }
+function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }</div>
+        </details>
+      </div>
+      <div class="modal-foot">
+        ${isNoteSyncEnabled() ? `<button class="btn btn-danger" data-act="clearNoteSync">동기화 끄기</button>` : ''}
+        <button class="btn btn-ghost" data-act="closeNoteSync">취소</button>
+        <button class="btn btn-primary" data-act="saveNoteSync">저장하고 동기화</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderWrongNoteBody(){
+
+
   const notes = STATE._notesCache || {};
   const all = Object.keys(notes).map(k => ({id:k, ...notes[k]}));
   let list;
@@ -1196,6 +1470,14 @@ function renderWrongNoteBody(){
     <div class="page-title">오답노트</div>
     <div class="page-sub">틀린 문제를 모아서 다시 풀고, 중요한 문제는 마킹해 시험 직전 최종 점검에 활용하세요</div>
 
+    <div class="note-sync-row">
+      ${isNoteSyncEnabled() ? `
+        <span class="sync-status ${STATE.noteSyncStatus && STATE.noteSyncStatus.state==='syncing' ? 'busy':''}">☁ ${STATE.noteSyncStatus ? escapeHtml(STATE.noteSyncStatus.message) : '동기화 켜짐'}</span>
+        <button class="btn btn-sm" data-act="syncNotesNow">지금 동기화</button>
+      ` : `<span class="sync-status off">이 기기에만 저장됨 · 다른 기기와 이어보려면 동기화를 설정하세요</span>`}
+      <button class="btn btn-sm btn-ghost" data-act="openNoteSync">⚙ 오답노트 동기화 설정</button>
+    </div>
+
     <div class="filter-tabs">
       <button class="filter-tab ${STATE.wrongFilter==='all'?'active':''}" data-act="wfilter" data-f="all">전체 오답 (${activeWrongCount})</button>
       <button class="filter-tab ${STATE.wrongFilter==='freq'?'active':''}" data-act="wfilter" data-f="freq">⚠ 빈번 오답 3회+ (${freqCount})</button>
@@ -1207,6 +1489,7 @@ function renderWrongNoteBody(){
     </div>
 
     ${list.length ? items : `<div class="empty">해당 조건에 맞는 문제가 없습니다.</div>`}
+    ${STATE.noteSyncModal ? noteSyncModalHTML() : ''}
   `;
   const mainEl = document.querySelector('main');
   if(mainEl) mainEl.innerHTML = body;
@@ -1269,12 +1552,35 @@ function bindEvents(){
           break;
         }
         case 'wfilter': STATE.wrongFilter = el.getAttribute('data-f'); renderWrongNoteBody(); break;
+        case 'openNoteSync': STATE.noteSyncModal = true; renderWrongNoteBody(); break;
+        case 'closeNoteSync': STATE.noteSyncModal = false; renderWrongNoteBody(); break;
+        case 'overlayCloseNoteSync': if(e.target === el){ STATE.noteSyncModal = false; renderWrongNoteBody(); } break;
+        case 'saveNoteSync': {
+          const code = (document.getElementById('syncCode')||{}).value?.trim() || '';
+          const endpointInput = document.getElementById('syncEndpoint');
+          const endpoint = endpointInput ? (endpointInput.value||'').trim() : '';
+          setSyncConfig({code, endpoint});
+          STATE.noteSyncModal = false;
+          if(isNoteSyncEnabled()) await syncNotesNow();
+          else STATE._notesCache = await getNotes();
+          renderWrongNoteBody();
+          break;
+        }
+        case 'clearNoteSync': {
+          setSyncConfig({code:'', endpoint:''});
+          STATE.noteSyncModal = false;
+          STATE.noteSyncStatus = null;
+          renderWrongNoteBody();
+          break;
+        }
+        case 'syncNotesNow': await syncNotesNow(); break;
         case 'toggleMarkNote': {
           const id = el.getAttribute('data-id');
           const notes = STATE._notesCache;
           notes[id].bookmarked = !notes[id].bookmarked;
           await sSet('notes', notes);
           renderWrongNoteBody();
+          if(isNoteSyncEnabled()) cloudPushNotes();
           break;
         }
         case 'retrySingle': {
