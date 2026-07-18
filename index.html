@@ -173,6 +173,10 @@
   .progress-fill{height:100%; background:var(--pine); border-radius:99px;}
   .progress-text{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); white-space:nowrap;}
   .navopen-btn{font-family:'IBM Plex Mono',monospace; font-size:12px; white-space:nowrap;}
+  .jump-select{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; padding:6px 8px; border-radius:7px;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:110px; flex-shrink:0;
+  }
 
   .qnav-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-top:6px;}
   @media (max-width:420px){.qnav-grid{grid-template-columns:repeat(5,1fr);}}
@@ -186,6 +190,10 @@
   .qnav-btn.correct{background:var(--ok-soft); color:var(--ok); border-color:var(--ok);}
   .qnav-btn.incorrect{background:var(--danger-soft); color:var(--danger); border-color:var(--danger);}
   .qnav-legend{font-size:11.5px; color:var(--ink-soft); margin-top:16px; display:flex; flex-direction:column; gap:6px;}
+  .subj-progress-list{display:flex; flex-direction:column; gap:8px; margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--line);}
+  .subj-progress-row{display:flex; align-items:center;}
+  .subj-progress-label{font-size:12px; font-weight:700; color:var(--ink-soft); width:44px; flex-shrink:0;}
+  .subj-progress-row .progress-track{flex:1; margin:0 10px !important;}
   .qnav-legend span{display:flex; align-items:center; gap:6px;}
   .swatch{width:10px; height:10px; border-radius:3px; display:inline-block; flex-shrink:0;}
 
@@ -1208,19 +1216,6 @@ function renderQuiz(){
   const total = sess.list.length;
   const idx = sess.idx;
 
-  const navBtns = sess.list.map((item,i) => {
-    let cls = 'qnav-btn';
-    if(i === idx) cls += ' cur';
-    if(sess.mode === 'practice' && item.checked){
-      cls += item.correct ? ' correct' : ' incorrect';
-    } else if(item.userAnswer !== null){
-      cls += ' answered';
-    }
-    return `<button class="${cls}" data-act="jumpQ" data-i="${i}">${item.qnum}</button>`;
-  }).join('');
-
-  const answeredCount = sess.list.filter(x=>x.userAnswer!==null).length;
-
   const subjectLabel = SUBJECT_NAMES[q.subject] ? `제${q.subject}과목 · ${SUBJECT_NAMES[q.subject]}` : ('과목 ' + q.subject);
   const setNameLabel = q._setName || sess.setName;
 
@@ -1258,12 +1253,20 @@ function renderQuiz(){
   }
 
   const progressPct = Math.round(((idx+1)/total)*100);
+  const answeredCount = sess.list.filter(x=>x.userAnswer!==null).length;
+  const jumpOptions = sess.list.map((item,i) => {
+    let mark = '·';
+    if(sess.mode === 'practice' && item.checked) mark = item.correct ? '✔' : '✕';
+    else if(item.userAnswer !== null) mark = '●';
+    return `<option value="${i}" ${i===idx?'selected':''}>${mark} ${item.qnum}번</option>`;
+  }).join('');
 
   return `
   <div class="quiz-shell">
     <div class="quiz-progressbar">
-      <button class="btn btn-ghost btn-sm navopen-btn" data-act="openNav">☰ ${idx+1}/${total}</button>
+      <select class="jump-select" data-act="jumpSelect" aria-label="문제 번호로 건너뛰기">${jumpOptions}</select>
       <div class="progress-track"><div class="progress-fill" style="width:${progressPct}%"></div></div>
+      <button class="btn btn-ghost btn-sm navopen-btn" data-act="openNav">📊 ${answeredCount}/${total}</button>
       ${sess.mode==='exam' ? `<button class="btn btn-primary btn-sm" data-act="submitExam">최종 제출</button>`
                             : `<button class="btn btn-primary btn-sm" data-act="finishPractice">종료·결과</button>`}
     </div>
@@ -1316,23 +1319,54 @@ function navModalHTML(){
     return `<button class="${cls}" data-act="jumpQ" data-i="${i}">${item.qnum}</button>`;
   }).join('');
 
+  // 과목별 진행 현황 (5과목 세트 기준. 주제모아풀기/오답노트 등 혼합 세션도 과목별로 집계됨)
+  const subjMap = {};
+  sess.list.forEach(item => {
+    const s = item.subject;
+    if(!subjMap[s]) subjMap[s] = {done:0, total:0};
+    subjMap[s].total++;
+    if(item.userAnswer !== null) subjMap[s].done++;
+  });
+  const subjRows = Object.keys(subjMap).sort((a,b)=>a-b).map(s => {
+    const {done,total:t} = subjMap[s];
+    const pct = t ? Math.round((done/t)*100) : 0;
+    return `
+      <div class="subj-progress-row">
+        <span class="subj-progress-label">${s}과목</span>
+        <div class="progress-track" style="margin:0 10px;"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <span class="mono" style="font-size:11.5px; color:var(--ink-soft); white-space:nowrap;">${done}/${t}</span>
+      </div>`;
+  }).join('');
+
+  const unanswered = sess.list.filter(x=>x.userAnswer===null);
+  const unansweredLabels = unanswered.map(item =>
+    (sess.sourceType==='set') ? item.qnum : (item._setName ? `${escapeHtml(item._setName)} ${item.qnum}번` : item.qnum)
+  );
+
   return `
   <div class="overlay" data-act="overlayCloseNav">
-    <div class="modal" data-stop="1" style="max-width:460px;">
+    <div class="modal" data-stop="1" style="max-width:480px;">
       <div class="modal-head">
         <div>
-          <h3>문항 목록</h3>
-          <div class="mono" style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">${escapeHtml(sess.setName)} · ${answeredCount}/${total} 답변완료</div>
+          <h3>문항 현황 · 이동</h3>
+          <div class="mono" style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">${escapeHtml(sess.setName)} · ${answeredCount}/${total} 답변완료 (${unanswered.length}문제 미답)</div>
         </div>
         <button class="icon-x" data-act="closeNav">✕</button>
       </div>
       <div class="modal-body">
+        <div class="subj-progress-list">${subjRows}</div>
         <div class="qnav-grid">${navBtns}</div>
         <div class="qnav-legend">
           <span><span class="swatch" style="background:var(--slate-soft); border:1px solid var(--slate);"></span>답변완료</span>
           <span><span class="swatch" style="background:var(--ok-soft); border:1px solid var(--ok);"></span>정답(연습모드)</span>
           <span><span class="swatch" style="background:var(--danger-soft); border:1px solid var(--danger);"></span>오답(연습모드)</span>
         </div>
+        ${unanswered.length ? `
+          <div class="ok-box" style="margin-top:14px;">
+            <b>안 푼 문제 (${unanswered.length}개)</b><br>
+            ${unansweredLabels.join(', ')}
+          </div>
+        ` : `<div class="ok-box" style="margin-top:14px;">모든 문제에 답변했습니다 🎉</div>`}
       </div>
     </div>
   </div>`;
@@ -1721,6 +1755,10 @@ function bindEvents(){
   const fileInput = document.getElementById('fileInput');
   if(fileInput){
     fileInput.onchange = (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); };
+  }
+  const jumpSelect = document.querySelector('.jump-select');
+  if(jumpSelect){
+    jumpSelect.onchange = (e) => { gotoIdx(Number(e.target.value)); };
   }
   document.querySelectorAll('[data-stop]').forEach(el => { el.onclick = (e) => e.stopPropagation(); });
 }
