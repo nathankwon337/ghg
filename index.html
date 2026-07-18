@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>온실가스 관리기사 학습 플랫폼</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- 선택 사항: 같은 폴더에 ghg_config.js 파일을 만들어 window.GHG_CLOUD_ENDPOINT를 설정하면
+     Google Apps Script를 통한 기기 간 클라우드 동기화가 활성화됩니다.
+     (gamify_config.js / apps_script_Code_gs.txt와 동일한 패턴, 없어도 앱은 정상 동작합니다) -->
+<script src="ghg_config.js" onerror="console.info('[ghg] ghg_config.js 없음 — 클라우드 동기화 비활성 상태로 동작합니다.')"></script>
+<style>
+  :root{
+    --bg:#F1F4F1;
+    --surface:#FFFFFF;
+    --surface-2:#E7ECE6;
+    --ink:#152018;
+    --ink-soft:#4C5B51;
+    --line:#D6DED4;
+    --pine:#1F5C42;
+    --pine-dark:#123F2C;
+    --pine-soft:#DCEBE2;
+    --slate:#33587D;
+    --slate-soft:#DFE9F2;
+    --amber:#B2632A;
+    --danger:#AB3B31;
+    --danger-soft:#F7E3DF;
+    --ok:#1F5C42;
+    --ok-soft:#DCEBE2;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(21,32,24,.06), 0 8px 24px -12px rgba(21,32,24,.18);
+    font-size:16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Gothic A1', -apple-system, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  #app{min-height:100vh; display:flex; flex-direction:column;}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 24px; background:var(--pine-dark); color:#fff;
+    position:sticky; top:0; z-index:40;
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px;}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:#7FD9A8; box-shadow:0 0 0 3px rgba(127,217,168,.25);}
+  .brand small{display:block; font-weight:400; font-size:11.5px; color:#B9D6C4; letter-spacing:.3px;}
+  .topbar-actions{display:flex; gap:8px; align-items:center;}
+  .pill{
+    font-size:12px; padding:5px 10px; border-radius:999px; background:rgba(255,255,255,.1);
+    color:#DDEEE4; font-family:'IBM Plex Mono',monospace;
+  }
+
+  main{flex:1; padding:28px 24px 60px; max-width:1180px; margin:0 auto; width:100%;}
+
+  h1,h2,h3{font-family:'Gothic A1',sans-serif; margin:0 0 4px;}
+  .page-title{font-size:22px; font-weight:900; color:var(--pine-dark);}
+  .page-sub{color:var(--ink-soft); font-size:13.5px; margin-bottom:22px;}
+
+  /* buttons */
+  .btn{
+    border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    padding:10px 16px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;
+    font-family:inherit; transition:all .12s ease; display:inline-flex; align-items:center; gap:6px;
+  }
+  .btn:hover{border-color:var(--pine); color:var(--pine-dark); background:var(--pine-soft);}
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--pine); border-color:var(--pine); color:#fff;}
+  .btn-primary:hover{background:var(--pine-dark); border-color:var(--pine-dark); color:#fff;}
+  .btn-ghost{background:transparent; border-color:transparent;}
+  .btn-ghost:hover{background:var(--surface-2);}
+  .btn-danger{border-color:var(--danger); color:var(--danger);}
+  .btn-danger:hover{background:var(--danger-soft);}
+  .btn-sm{padding:6px 10px; font-size:12.5px; border-radius:7px;}
+  .btn[disabled]{opacity:.4; cursor:not-allowed; pointer-events:none;}
+  .btn-block{width:100%; justify-content:center;}
+
+  /* cards */
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow);}
+  .grid-cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px;}
+
+  .set-card{padding:18px; display:flex; flex-direction:column; gap:10px;}
+  .set-card .name{font-weight:800; font-size:15.5px; color:var(--pine-dark);}
+  .set-card .meta{font-size:12.5px; color:var(--ink-soft); display:flex; gap:10px; flex-wrap:wrap;}
+  .set-card .meta span{background:var(--surface-2); padding:2px 8px; border-radius:999px; font-family:'IBM Plex Mono',monospace;}
+  .set-card .actions{display:flex; gap:8px; margin-top:4px;}
+
+  .upload-card{
+    border:2px dashed var(--line); border-radius:var(--radius); padding:22px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    color:var(--ink-soft); cursor:pointer; text-align:center; min-height:150px;
+    background:rgba(255,255,255,.5);
+  }
+  .upload-card:hover{border-color:var(--pine); color:var(--pine-dark); background:var(--pine-soft);}
+  .upload-card b{color:var(--pine-dark); font-size:14.5px;}
+
+  /* section headers on home */
+  .section-row{display:flex; align-items:baseline; justify-content:space-between; margin:30px 0 12px;}
+  .section-row h2{font-size:15px; color:var(--pine-dark); font-weight:800;}
+  .section-row .count{font-size:12px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace;}
+
+  .empty{padding:34px 20px; text-align:center; color:var(--ink-soft); font-size:13.5px; border:1px dashed var(--line); border-radius:var(--radius);}
+
+  /* modal */
+  .overlay{position:fixed; inset:0; background:rgba(15,24,18,.55); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px;}
+  .modal{background:var(--surface); border-radius:14px; max-width:560px; width:100%; max-height:86vh; overflow:auto; box-shadow:0 30px 60px -20px rgba(0,0,0,.35);}
+  .modal-head{padding:18px 22px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center;}
+  .modal-head h3{font-size:16px; color:var(--pine-dark);}
+  .modal-body{padding:20px 22px;}
+  .modal-foot{padding:14px 22px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;}
+  .icon-x{cursor:pointer; border:none; background:none; font-size:18px; color:var(--ink-soft); line-height:1;}
+
+  .field-label{font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px; display:block;}
+  .warn-box{background:#FBF3E4; border:1px solid #E9CE9C; color:#7A5217; border-radius:8px; padding:12px 14px; font-size:12.8px; margin-top:10px; max-height:180px; overflow:auto;}
+  .err-box{background:var(--danger-soft); border:1px solid #E2B4AC; color:var(--danger); border-radius:8px; padding:12px 14px; font-size:12.8px; margin-top:10px;}
+  .ok-box{background:var(--ok-soft); border:1px solid #B6D9C4; color:var(--ok); border-radius:8px; padding:12px 14px; font-size:12.8px; margin-top:10px;}
+
+  /* mode select */
+  .mode-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px;}
+  @media (max-width:640px){.mode-grid{grid-template-columns:1fr;}}
+  .mode-card{padding:22px; cursor:pointer; border:2px solid var(--line); transition:all .12s ease;}
+  .mode-card:hover{border-color:var(--pine); background:var(--pine-soft);}
+  .mode-card h3{font-size:16px; color:var(--pine-dark); margin-bottom:6px;}
+  .mode-card p{font-size:12.8px; color:var(--ink-soft); line-height:1.5; margin:0;}
+  .mode-card .tag{display:inline-block; font-size:11px; font-family:'IBM Plex Mono',monospace; background:var(--surface-2); padding:2px 8px; border-radius:999px; margin-bottom:10px; color:var(--ink-soft);}
+
+  /* quiz layout: single column, question-first. navigator lives in a modal. */
+  .quiz-shell{max-width:720px; margin:0 auto;}
+  .quiz-progressbar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin-bottom:12px; padding:10px 14px; background:var(--surface); border:1px solid var(--line);
+    border-radius:9px; position:sticky; top:66px; z-index:10;
+  }
+  .progress-track{flex:1; height:6px; background:var(--surface-2); border-radius:99px; overflow:hidden; margin:0 12px;}
+  .progress-fill{height:100%; background:var(--pine); border-radius:99px;}
+  .progress-text{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); white-space:nowrap;}
+  .navopen-btn{font-family:'IBM Plex Mono',monospace; font-size:12px; white-space:nowrap;}
+
+  .qnav-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-top:6px;}
+  @media (max-width:420px){.qnav-grid{grid-template-columns:repeat(5,1fr);}}
+  .qnav-btn{
+    aspect-ratio:1; border-radius:6px; border:1px solid var(--line); background:var(--surface);
+    font-family:'IBM Plex Mono',monospace; font-size:12px; cursor:pointer; color:var(--ink-soft);
+    display:flex; align-items:center; justify-content:center; max-width:50px; max-height:50px;
+  }
+  .qnav-btn.cur{outline:2px solid var(--pine); outline-offset:1px;}
+  .qnav-btn.answered{background:var(--slate-soft); color:var(--slate); border-color:var(--slate);}
+  .qnav-btn.correct{background:var(--ok-soft); color:var(--ok); border-color:var(--ok);}
+  .qnav-btn.incorrect{background:var(--danger-soft); color:var(--danger); border-color:var(--danger);}
+  .qnav-legend{font-size:11.5px; color:var(--ink-soft); margin-top:16px; display:flex; flex-direction:column; gap:6px;}
+  .qnav-legend span{display:flex; align-items:center; gap:6px;}
+  .swatch{width:10px; height:10px; border-radius:3px; display:inline-block; flex-shrink:0;}
+
+  .quiz-main{padding:22px 22px 24px; min-height:380px; display:flex; flex-direction:column;}
+  @media (min-width:640px){.quiz-main{padding:26px 28px;}}
+  .q-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
+  .q-index{font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--ink-soft);}
+  .q-badges{display:flex; gap:6px;}
+  .badge{font-size:11px; padding:3px 8px; border-radius:999px; font-weight:700;}
+  .badge-calc{background:var(--slate-soft); color:var(--slate);}
+  .badge-mark{background:#FBEBD0; color:var(--amber); cursor:pointer; border:1px solid transparent;}
+  .badge-mark.active{background:var(--amber); color:#fff;}
+  .badge-freq{background:var(--danger-soft); color:var(--danger);}
+
+  .q-text{font-size:16px; line-height:1.65; font-weight:600; margin-bottom:14px; white-space:pre-wrap;}
+  .q-image-note{border:1px dashed var(--line); background:var(--surface-2); color:var(--ink-soft); font-size:12px; padding:10px 14px; border-radius:8px; margin-bottom:16px;}
+  .q-diagram-wrap{margin-bottom:16px;}
+  .q-diagram-img{max-width:100%; border-radius:8px; border:1px solid var(--line); display:block;}
+
+  .options{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
+  .opt{
+    text-align:left; padding:12px 14px; border-radius:9px; border:1.5px solid var(--line);
+    background:var(--surface); cursor:pointer; font-size:14.5px; line-height:1.5; display:flex; gap:10px;
+  }
+  .opt:hover{border-color:var(--pine); background:var(--pine-soft);}
+  .opt.selected{border-color:var(--pine); background:var(--pine-soft); font-weight:700;}
+  .opt.reveal-correct{border-color:var(--ok); background:var(--ok-soft); font-weight:700;}
+  .opt.reveal-wrong{border-color:var(--danger); background:var(--danger-soft);}
+  .opt .num{font-family:'IBM Plex Mono',monospace; color:var(--ink-soft); flex-shrink:0;}
+  .opt[disabled], .opt.locked{cursor:default;}
+
+  .feedback{display:flex; align-items:center; gap:8px; font-weight:800; font-size:14px; margin-bottom:10px;}
+  .feedback.ok{color:var(--ok);}
+  .feedback.no{color:var(--danger);}
+  .explain-box{background:var(--surface-2); border-radius:9px; padding:14px 16px; font-size:13.5px; line-height:1.6; color:var(--ink); margin-bottom:16px;}
+  .explain-box b{color:var(--pine-dark);}
+
+  .quiz-footer{margin-top:auto; display:flex; justify-content:space-between; align-items:center; padding-top:16px; border-top:1px solid var(--line);}
+  .quiz-footer-left,.quiz-footer-right{display:flex; gap:8px;}
+
+  /* calc modal steps */
+  .step-box{background:var(--surface-2); border-radius:10px; padding:18px; font-size:14px; line-height:1.7; min-height:90px;}
+  .step-counter{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); margin-bottom:8px;}
+  .step-dots{display:flex; gap:5px; margin-top:16px; justify-content:center;}
+  .step-dot{width:7px; height:7px; border-radius:50%; background:var(--line);}
+  .step-dot.done{background:var(--pine);}
+
+  /* results */
+  .score-hero{display:flex; gap:26px; align-items:center; padding:26px 28px; margin-bottom:20px;}
+  .gauge-wrap{flex-shrink:0;}
+  .score-info{flex:1;}
+  .score-info .big{font-family:'IBM Plex Mono',monospace; font-size:40px; font-weight:700; color:var(--pine-dark); line-height:1;}
+  .score-info .big span{font-size:18px; color:var(--ink-soft);}
+  .result-badge{display:inline-block; margin-top:8px; padding:5px 14px; border-radius:999px; font-weight:800; font-size:13px;}
+  .result-badge.pass{background:var(--ok-soft); color:var(--ok);}
+  .result-badge.fail{background:var(--danger-soft); color:var(--danger);}
+  .result-reason{font-size:12.8px; color:var(--ink-soft); margin-top:8px; line-height:1.6;}
+
+  .subject-table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  .subject-table th{text-align:left; font-size:11.5px; color:var(--ink-soft); padding:8px 10px; border-bottom:1px solid var(--line); font-weight:700;}
+  .subject-table td{padding:10px; border-bottom:1px solid var(--line); vertical-align:middle;}
+  .bar-track{background:var(--surface-2); border-radius:5px; height:10px; position:relative; width:160px; overflow:visible;}
+  .bar-fill{background:var(--pine); height:100%; border-radius:5px;}
+  .bar-fill.danger{background:var(--danger);}
+  .bar-threshold{position:absolute; top:-3px; bottom:-3px; width:2px; background:var(--amber);}
+  .subj-fail{color:var(--danger); font-weight:800;}
+  .subj-pass{color:var(--ok); font-weight:700;}
+
+  /* wrong note */
+  .filter-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
+  .filter-tab{padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:var(--surface); font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-soft);}
+  .filter-tab.active{background:var(--pine); border-color:var(--pine); color:#fff;}
+  .wrong-item{padding:16px 18px; display:flex; flex-direction:column; gap:8px; margin-bottom:10px;}
+  .wrong-item-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .wrong-item-meta{font-size:11.5px; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .wrong-item-q{font-size:14px; font-weight:600; line-height:1.5;}
+  .wrong-item-actions{display:flex; gap:8px; align-items:center;}
+  .star-btn{border:none; background:none; cursor:pointer; font-size:18px; color:var(--line); line-height:1;}
+  .star-btn.on{color:var(--amber);}
+
+  footer.note{text-align:center; color:var(--ink-soft); font-size:11.5px; padding:20px; opacity:.7;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* =========================================================================
+   온실가스 관리기사 학습 플랫폼 — single-file app
+   Storage: browser localStorage (works on GitHub Pages / any static host),
+   with an OPTIONAL Google Apps Script cloud-sync layer for cross-device
+   backup — same pattern as gamify_config.js / gamify.js in this project.
+   To enable cloud sync, create a sibling file "ghg_config.js" with:
+     window.GHG_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/.../exec';
+   and load it BEFORE this script tag. The existing apps_script_Code_gs.txt
+   backend (doGet/doPost keyed by "nickname") can be reused as-is — this app
+   just sends a namespaced nickname ("ghg::<입력한 이름>") so its profile rows
+   never collide with the language-game profiles stored in the same sheet.
+
+   localStorage keys (all prefixed "ghg_" to avoid clashing with the other
+   games sharing this origin):
+     - "ghg_qsets_index"     -> [{id,name,uploadedAt,total,calcCount}]
+     - "ghg_qset_<id>"       -> {id,name,uploadedAt,questions:[...]}
+     - "ghg_notes"           -> { [qid]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot} }
+     - "ghg_results_history" -> [{ts,setId,setName,mode,total,score,subjects,pass}]
+     - "ghg_nickname"        -> string (cloud sync identity, optional)
+   Only "notes" + "results_history" (the learner's progress) are pushed to
+   the cloud — question sets themselves are re-uploaded per device from the
+   .xlsx files and are not synced (keeps payload small).
+   ========================================================================= */
+
+const SUBJECT_NAMES = {
+  1:'기후변화 개론',
+  2:'온실가스 배출의 이해',
+  3:'온실가스 산정과 데이터 품질관리',
+  4:'온실가스 감축관리',
+  5:'온실가스 관련 법규'
+};
+const PASS_TOTAL = 60;
+const SUBJECT_PASS_MIN = 8; // 과목별 20문항 중 8문제(40%) 미만 = 과락 -> 8개 이상 정답해야 통과
+const LS_PREFIX = 'ghg_';
+
+let STATE = {
+  view: 'home',            // home | mode | quiz | result | wrongnote
+  sets: [],                // index
+  activeSet: null,         // full set object {id,name,questions}
+  session: null,           // {mode, sourceType, list:[...], idx}
+  lastResult: null,
+  wrongFilter: 'all',      // all | freq | bookmark
+  calcModal: null,         // {steps, stepIdx}
+  navModal: false,
+  uploadModal: false,
+  uploadState: null,       // {status, errors, warnings, parsed}
+  syncModal: false,
+  toast: null
+};
+
+/* ---------------------- local storage helpers (sync API kept async for drop-in compatibility) ---------------------- */
+async function sGet(key){
+  try{ const raw = localStorage.getItem(LS_PREFIX + key); return raw ? JSON.parse(raw) : null; }
+  catch(e){ return null; }
+}
+async function sSet(key, value){
+  try{ localStorage.setItem(LS_PREFIX + key, JSON.stringify(value)); return true; }
+  catch(e){ console.error('storage set failed', key, e); return false; }
+}
+async function sDelete(key){
+  try{ localStorage.removeItem(LS_PREFIX + key); return true; }
+  catch(e){ return false; }
+}
+
+function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function qid(setId, subject, qnum){ return setId + '::' + subject + '::' + qnum; }
+
+/* ---------------------- optional cloud sync (Google Apps Script) ---------------------- */
+function cloudEndpoint(){
+  return (typeof window.GHG_CLOUD_ENDPOINT === 'string' && window.GHG_CLOUD_ENDPOINT) ? window.GHG_CLOUD_ENDPOINT.trim() : '';
+}
+function getNickname(){ try{ return localStorage.getItem(LS_PREFIX+'nickname') || ''; }catch(e){ return ''; } }
+function setNickname(n){ try{ localStorage.setItem(LS_PREFIX+'nickname', n||''); }catch(e){} }
+function cloudRowKey(nickname){ return 'ghg::' + nickname; }
+function isCloudConfigured(){ return !!cloudEndpoint(); }
+
+async function cloudPush(){
+  const url = cloudEndpoint();
+  const nickname = getNickname();
+  if(!url || !nickname) return;
+  try{
+    const notes = await sGet('notes') || {};
+    const history = await sGet('results_history') || [];
+    const payload = { nickname: cloudRowKey(nickname), app:'ghg_profile', notes, resultsHistory: history, updatedAt: Date.now() };
+    await fetch(url, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+      body: JSON.stringify(payload)
+    });
+  }catch(e){ console.error('[ghg] cloud push failed', e); /* offline/오류 시 조용히 무시 */ }
+}
+
+async function cloudPull(){
+  const url = cloudEndpoint();
+  const nickname = getNickname();
+  if(!url || !nickname) return {ok:false, reason:'no-endpoint-or-nickname'};
+  try{
+    const res = await fetch(url + '?action=get&nickname=' + encodeURIComponent(cloudRowKey(nickname)));
+    const json = await res.json();
+    if(json && json.found && json.data){
+      if(json.data.notes) await sSet('notes', json.data.notes);
+      if(json.data.resultsHistory) await sSet('results_history', json.data.resultsHistory);
+      return {ok:true, found:true};
+    }
+    return {ok:true, found:false};
+  }catch(e){ console.error('[ghg] cloud pull failed', e); return {ok:false, reason:'network'}; }
+}
+
+/* ---------------------- init ---------------------- */
+async function init(){
+  const idx = await sGet('qsets_index');
+  STATE.sets = idx || [];
+  render();
+}
+
+/* ---------------------- excel parsing ---------------------- */
+function parseWorkbook(arrayBuffer){
+  const wb = XLSX.read(arrayBuffer, {type:'array'});
+  let dataSheet = null;
+  for(const name of wb.SheetNames){
+    const ws = wb.Sheets[name];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+    if(rows.length && Array.isArray(rows[0]) && rows[0].some(c => (''+c).trim() === 'set_name')){
+      dataSheet = rows;
+      break;
+    }
+  }
+  if(!dataSheet) throw new Error('업로드 규격(set_name 등 컬럼 헤더)을 찾을 수 없습니다. 기능정의서의 엑셀 템플릿 형식을 확인해주세요.');
+
+  const headerRow = dataSheet[0].map(h => (h===null||h===undefined) ? '' : (''+h).trim());
+  const colIdx = {};
+  headerRow.forEach((h,i) => { if(h) colIdx[h] = i; });
+  const required = ['set_name','subject_num','question_num','question_text','option_1','option_2','option_3','option_4','answer','general_explanation','is_calculation'];
+  const missing = required.filter(c => !(c in colIdx));
+  if(missing.length) throw new Error('필수 컬럼이 누락되었습니다: ' + missing.join(', '));
+
+  // find where korean label row is (row[1]) vs data start
+  let dataStart = 1;
+  const row1 = dataSheet[1];
+  if(row1 && (''+row1[colIdx['question_num']]).match(/^[0-9]+$/) === null){
+    dataStart = 2; // row1 is korean label header, data begins row 2
+  }
+
+  const rows = [];
+  for(let r = dataStart; r < dataSheet.length; r++){
+    const row = dataSheet[r];
+    if(!row || row.every(c => c===null || c==='' || c===undefined)) continue;
+    const get = (k) => { const i = colIdx[k]; if(i===undefined) return null; const v = row[i]; return v===undefined ? null : v; };
+    const qn = get('question_num');
+    if(qn === null || qn === '') continue;
+    const isCalcRaw = get('is_calculation');
+    const isCalc = isCalcRaw === true || (''+isCalcRaw).trim().toUpperCase() === 'TRUE';
+    const stepRaw = get('step_explanation');
+    rows.push({
+      set_name: get('set_name'),
+      subject_num: Number(get('subject_num')),
+      question_num: Number(qn),
+      question_text: (get('question_text')||'').toString(),
+      image_url: get('image_url') || null,
+      options: [1,2,3,4].map(n => (get('option_'+n)||'').toString()),
+      answer: Number(get('answer')),
+      general_explanation: (get('general_explanation')||'').toString(),
+      is_calculation: isCalc,
+      steps: (isCalc && stepRaw) ? (''+stepRaw).split('||').map(s=>s.trim()).filter(Boolean) : []
+    });
+  }
+  return { setName: rows.length ? rows[0].set_name : '이름없는 세트', rows };
+}
+
+function validateRows(rows){
+  const errors = [];
+  const warnings = [];
+  if(rows.length !== 100){
+    errors.push('총 문항 수가 ' + rows.length + '개입니다. 100개(과목별 20문항)가 되어야 합니다.');
+  }
+  const bySubject = {1:0,2:0,3:0,4:0,5:0};
+  const seenQ = new Set();
+  rows.forEach(r => {
+    if(bySubject[r.subject_num] !== undefined) bySubject[r.subject_num]++;
+    if(r.question_num){
+      if(seenQ.has(r.question_num)) warnings.push('문제번호 ' + r.question_num + '이(가) 중복되었습니다.');
+      seenQ.add(r.question_num);
+    }
+    if(![1,2,3,4].includes(r.answer)){
+      errors.push('문제 ' + r.question_num + '번의 정답 번호가 올바르지 않습니다 (' + r.answer + ').');
+    }
+    if(r.is_calculation && r.steps.length === 0){
+      warnings.push('문제 ' + r.question_num + '번은 계산문제(TRUE)이지만 단계별 풀이 데이터가 없습니다.');
+    }
+  });
+  [1,2,3,4,5].forEach(s => {
+    if(bySubject[s] !== 20){
+      errors.push('제' + s + '과목(' + (SUBJECT_NAMES[s]||'') + ') 문항 수가 ' + bySubject[s] + '개입니다. 20개가 되어야 합니다.');
+    }
+  });
+  return {errors, warnings};
+}
+
+async function handleFile(file){
+  STATE.uploadState = {status:'parsing', errors:[], warnings:[], parsed:null};
+  render();
+  try{
+    const buf = await file.arrayBuffer();
+    const {setName, rows} = parseWorkbook(buf);
+    const {errors, warnings} = validateRows(rows);
+    STATE.uploadState = {status: errors.length ? 'error' : 'ready', errors, warnings, parsed:{setName, rows}};
+  }catch(e){
+    STATE.uploadState = {status:'error', errors:[e.message || '파일을 읽는 중 오류가 발생했습니다.'], warnings:[], parsed:null};
+  }
+  render();
+}
+
+async function confirmUpload(){
+  const {parsed} = STATE.uploadState;
+  if(!parsed) return;
+  const id = uid('set');
+  const questions = parsed.rows.map(r => ({
+    qnum: r.question_num, subject: r.subject_num, question_text: r.question_text,
+    image_url: r.image_url, options: r.options, answer: r.answer,
+    general_explanation: r.general_explanation, is_calculation: r.is_calculation, steps: r.steps
+  })).sort((a,b) => a.qnum - b.qnum);
+  const calcCount = questions.filter(q=>q.is_calculation).length;
+  const setObj = {id, name: parsed.setName || ('세트 ' + (STATE.sets.length+1)), uploadedAt: Date.now(), questions};
+  await sSet('qset_' + id, setObj);
+  const idxEntry = {id, name: setObj.name, uploadedAt: setObj.uploadedAt, total: questions.length, calcCount};
+  STATE.sets = [idxEntry, ...STATE.sets];
+  await sSet('qsets_index', STATE.sets);
+  STATE.uploadModal = false;
+  STATE.uploadState = null;
+  STATE.toast = '"' + setObj.name + '" 세트가 등록되었습니다.';
+  render();
+  setTimeout(()=>{ STATE.toast=null; render(); }, 2600);
+}
+
+async function deleteSet(id){
+  if(!confirm('이 문제 세트를 삭제하시겠습니까? 저장된 문제 데이터가 삭제됩니다 (오답노트 기록은 유지됩니다).')) return;
+  STATE.sets = STATE.sets.filter(s => s.id !== id);
+  await sSet('qsets_index', STATE.sets);
+  await sDelete('qset_' + id);
+  render();
+}
+
+/* ---------------------- notes (wrong answers + bookmarks) ---------------------- */
+async function getNotes(){ return (await sGet('notes')) || {}; }
+
+async function recordAnswer(setId, setName, q, isCorrect){
+  const notes = await getNotes();
+  const id = qid(setId, q.subject, q.qnum);
+  const snapshot = {
+    setId, setName, subject:q.subject, qnum:q.qnum, question_text:q.question_text,
+    options:q.options, answer:q.answer, general_explanation:q.general_explanation,
+    is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url
+  };
+  const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
+  cur.snapshot = snapshot;
+  if(isCorrect){
+    if(cur.wrongCount > 0) cur.resolved = true;
+  } else {
+    cur.wrongCount = (cur.wrongCount||0) + 1;
+    cur.resolved = false;
+    cur.lastWrongAt = Date.now();
+  }
+  notes[id] = cur;
+  await sSet('notes', notes);
+  cloudPush();
+}
+
+async function toggleBookmark(setId, q){
+  const notes = await getNotes();
+  const id = qid(setId, q.subject, q.qnum);
+  const snapshot = {
+    setId, setName:(STATE.activeSet? STATE.activeSet.name : (q.setName||'')), subject:q.subject, qnum:q.qnum,
+    question_text:q.question_text, options:q.options, answer:q.answer,
+    general_explanation:q.general_explanation, is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url
+  };
+  const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
+  cur.bookmarked = !cur.bookmarked;
+  cur.snapshot = snapshot;
+  notes[id] = cur;
+  await sSet('notes', notes);
+  cloudPush();
+  render();
+}
+
+async function saveResultHistory(entry){
+  const hist = (await sGet('results_history')) || [];
+  hist.unshift(entry);
+  await sSet('results_history', hist.slice(0,50));
+  cloudPush();
+}
+
+/* ---------------------- session control ---------------------- */
+function buildSessionQuestions(questions){
+  return questions.map(q => ({...q, userAnswer:null, checked:false, correct:null}));
+}
+
+async function startSet(setId, mode){
+  const full = await sGet('qset_' + setId);
+  if(!full){ alert('세트 데이터를 불러올 수 없습니다.'); return; }
+  STATE.activeSet = full;
+  STATE.session = {
+    mode, sourceType:'set', setId: full.id, setName: full.name,
+    list: buildSessionQuestions(full.questions), idx: 0
+  };
+  STATE.view = 'quiz';
+  render();
+}
+
+async function startWrongOnly(filterList){
+  if(!filterList.length){ alert('해당 조건의 문제가 없습니다.'); return; }
+  const list = filterList.map(n => ({
+    qnum:n.snapshot.qnum, subject:n.snapshot.subject, question_text:n.snapshot.question_text,
+    options:n.snapshot.options, answer:n.snapshot.answer, general_explanation:n.snapshot.general_explanation,
+    is_calculation:n.snapshot.is_calculation, steps:n.snapshot.steps, image_url:n.snapshot.image_url,
+    _setId:n.snapshot.setId, _setName:n.snapshot.setName,
+    userAnswer:null, checked:false, correct:null
+  }));
+  STATE.activeSet = null;
+  STATE.session = { mode:'practice', sourceType:'wrongOnly', setId:null, setName:'오답 다시 풀기', list, idx:0 };
+  STATE.view = 'quiz';
+  render();
+}
+
+function currentQ(){ return STATE.session.list[STATE.session.idx]; }
+
+function selectOption(n){
+  const q = currentQ();
+  if(STATE.session.mode === 'practice' && q.checked) return;
+  q.userAnswer = n;
+  render();
+}
+
+async function checkAnswer(){
+  const q = currentQ();
+  if(q.userAnswer === null) return;
+  q.checked = true;
+  q.correct = (q.userAnswer === q.answer);
+  const setId = q._setId || STATE.session.setId;
+  const setName = q._setName || STATE.session.setName;
+  await recordAnswer(setId, setName, q, q.correct);
+  render();
+}
+
+function gotoIdx(i){
+  if(i<0 || i>=STATE.session.list.length) return;
+  STATE.session.idx = i;
+  STATE.navModal = false;
+  render();
+}
+function nextQ(){ gotoIdx(STATE.session.idx+1); }
+function prevQ(){ gotoIdx(STATE.session.idx-1); }
+
+function openCalcModal(){
+  const q = currentQ();
+  if(!q.steps || !q.steps.length) return;
+  STATE.calcModal = {steps:q.steps, stepIdx:0};
+  render();
+}
+function calcNext(){
+  if(STATE.calcModal.stepIdx < STATE.calcModal.steps.length-1){ STATE.calcModal.stepIdx++; render(); }
+  else { STATE.calcModal = null; render(); }
+}
+function closeCalcModal(){ STATE.calcModal = null; render(); }
+
+async function submitExam(){
+  const unanswered = STATE.session.list.filter(q => q.userAnswer === null).length;
+  if(unanswered > 0){
+    if(!confirm(unanswered + '개 문항이 아직 풀리지 않았습니다. 그래도 제출하시겠습니까?')) return;
+  }
+  for(const q of STATE.session.list){
+    q.correct = (q.userAnswer !== null) && (q.userAnswer === q.answer);
+    await recordAnswer(STATE.session.setId, STATE.session.setName, q, q.correct);
+  }
+  await finalizeResult();
+}
+
+async function finishPracticeSet(){
+  await finalizeResult();
+}
+
+async function finalizeResult(){
+  const list = STATE.session.list;
+  const subjects = {};
+  [1,2,3,4,5].forEach(s => subjects[s] = {total:0, correct:0});
+  let totalCorrect = 0;
+  list.forEach(q => {
+    const s = q.subject;
+    if(subjects[s]){
+      subjects[s].total++;
+      if(q.correct) subjects[s].correct++;
+    }
+    if(q.correct) totalCorrect++;
+  });
+  const isFullSet = STATE.session.sourceType === 'set' && list.length === 100;
+  let subjFail = false;
+  Object.values(subjects).forEach(s => { if(s.total>0 && s.correct < SUBJECT_PASS_MIN) subjFail = true; });
+  const pass = isFullSet ? (totalCorrect >= PASS_TOTAL && !subjFail) : null;
+
+  STATE.lastResult = {
+    setName: STATE.session.setName, mode: STATE.session.mode, isFullSet,
+    total: list.length, correct: totalCorrect, subjects, pass, subjFail
+  };
+  if(isFullSet){
+    await saveResultHistory({
+      ts:Date.now(), setId:STATE.session.setId, setName:STATE.session.setName, mode:STATE.session.mode,
+      total:list.length, score:totalCorrect, subjects, pass
+    });
+  }
+  STATE.view = 'result';
+  STATE.session = null;
+  render();
+}
+
+/* ---------------------- render root ---------------------- */
+function render(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    ${topbar()}
+    <main>${renderView()}</main>
+    ${STATE.toast ? `<div class="overlay" style="background:transparent; align-items:flex-end; justify-content:center; pointer-events:none;">
+      <div class="card mono" style="padding:12px 20px; margin-bottom:24px; background:var(--pine-dark); color:#fff; font-size:13px; border:none;">${STATE.toast}</div>
+    </div>` : ''}
+    ${STATE.uploadModal ? uploadModalHTML() : ''}
+    ${STATE.navModal && STATE.session ? navModalHTML() : ''}
+    ${STATE.calcModal ? calcModalHTML() : ''}
+    ${STATE.syncModal ? syncModalHTML() : ''}
+    <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저에 저장되며, 닉네임을 설정하면 선택적으로 클라우드에도 백업됩니다</footer>
+  `;
+  bindEvents();
+}
+
+function topbar(){
+  return `
+  <div class="topbar">
+    <div class="brand" onclick="goHome()" style="cursor:pointer;">
+      <span class="dot"></span>
+      <div>온실가스 관리기사 학습 플랫폼<small>9월 필기시험 대비 · 기출문제 트레이너</small></div>
+    </div>
+    <div class="topbar-actions">
+      ${STATE.view!=='home' ? `<button class="btn btn-ghost btn-sm" data-act="home">세트 목록</button>` : ''}
+      <button class="btn btn-ghost btn-sm" data-act="wrongnote">오답노트</button>
+      <button class="btn btn-ghost btn-sm" data-act="openSync" title="클라우드 동기화">☁ ${isCloudConfigured() ? (getNickname()?'동기화됨':'설정') : '동기화'}</button>
+    </div>
+  </div>`;
+}
+
+function syncModalHTML(){
+  const url = cloudEndpoint();
+  const nick = getNickname();
+  return `
+  <div class="overlay" data-act="overlayCloseSync">
+    <div class="modal" data-stop="1" style="max-width:460px;">
+      <div class="modal-head">
+        <h3>☁ 클라우드 동기화 (선택)</h3>
+        <button class="icon-x" data-act="closeSync">✕</button>
+      </div>
+      <div class="modal-body">
+        ${url ? `
+          <div class="ok-box">Google Apps Script 엔드포인트가 설정되어 있습니다.</div>
+          <span class="field-label" style="margin-top:14px;">닉네임 (기기 간 동기화 식별용)</span>
+          <input type="text" id="syncNickname" value="${escapeHtml(nick)}" placeholder="예: 민준" style="width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px; font-size:14px;">
+          <div style="font-size:12px; color:var(--ink-soft); margin-top:8px; line-height:1.5;">
+            같은 닉네임을 다른 기기/브라우저에서도 입력하면 오답노트·마킹·학습 결과가 자동으로 저장·불러오기 됩니다. (문제 세트 자체는 기기마다 엑셀로 다시 업로드해야 합니다.)
+          </div>
+        ` : `
+          <div class="warn-box">
+            아직 클라우드 동기화가 설정되지 않았습니다. 이 HTML 파일과 같은 폴더에 <b>ghg_config.js</b> 파일을 만들고 아래처럼 작성한 뒤,
+            <code>&lt;script src="ghg_config.js"&gt;&lt;/script&gt;</code> 한 줄을 이 HTML의 &lt;head&gt;에 추가하면 됩니다.<br><br>
+            <span class="mono">window.GHG_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/…/exec';</span><br><br>
+            이미 다른 게임들에서 쓰고 있는 apps_script_Code_gs.txt를 그대로 재사용할 수 있습니다 (같은 시트에 <code>ghg::닉네임</code> 형태로 별도 행이 저장되어 겹치지 않습니다).
+          </div>
+        `}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-act="closeSync">닫기</button>
+        ${url ? `<button class="btn" data-act="cloudPullNow">☁ 불러오기</button><button class="btn btn-primary" data-act="saveNickname">저장</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderView(){
+  switch(STATE.view){
+    case 'home': return renderHome();
+    case 'mode': return renderModeSelect();
+    case 'quiz': return renderQuiz();
+    case 'result': return renderResult();
+    case 'wrongnote': return renderWrongNoteView();
+    default: return '';
+  }
+}
+
+/* ---------------------- HOME ---------------------- */
+function renderHome(){
+  const cards = STATE.sets.map(s => `
+    <div class="card set-card">
+      <div class="name">${escapeHtml(s.name)}</div>
+      <div class="meta">
+        <span>${s.total}문항</span>
+        <span>계산문제 ${s.calcCount}개</span>
+        <span>${new Date(s.uploadedAt).toLocaleDateString('ko-KR')}</span>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary btn-sm" data-act="openMode" data-id="${s.id}">학습 시작</button>
+        <button class="btn btn-danger btn-sm" data-act="deleteSet" data-id="${s.id}">삭제</button>
+      </div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="page-title">학습할 기출문제 세트를 선택하세요</div>
+    <div class="page-sub">세트당 100문항(5과목 × 20문항) · 실전 모드와 연습 모드를 지원합니다</div>
+
+    <div class="section-row"><h2>내 문제 세트</h2><span class="count">${STATE.sets.length}개 세트</span></div>
+    ${STATE.sets.length ? `<div class="grid-cards">${cards}
+      <div class="upload-card" data-act="openUpload">
+        <b>+ 새 문제 세트 업로드</b>
+        <span>기출문제 엑셀(.xlsx) 파일을 업로드하세요</span>
+      </div>
+    </div>` : `
+      <div class="upload-card" data-act="openUpload" style="min-height:180px;">
+        <b>+ 첫 문제 세트 업로드하기</b>
+        <span>기능정의서 규격에 맞는 엑셀(.xlsx) 파일을 업로드하면 자동으로 100문항이 등록됩니다</span>
+      </div>
+    `}
+  `;
+}
+
+async function openUpload(){
+  STATE.uploadModal = true;
+  STATE.uploadState = null;
+  render();
+}
+
+function uploadModalHTML(){
+  const us = STATE.uploadState;
+  return `
+  <div class="overlay" data-act="overlayClose">
+    <div class="modal" data-stop="1">
+      <div class="modal-head">
+        <h3>기출문제 엑셀 업로드</h3>
+        <button class="icon-x" data-act="closeUpload">✕</button>
+      </div>
+      <div class="modal-body">
+        ${!us ? `
+          <span class="field-label">엑셀 파일 선택 (.xlsx)</span>
+          <input type="file" id="fileInput" accept=".xlsx,.xls" style="font-size:13.5px;">
+          <div class="ok-box" style="margin-top:14px;">
+            규격: set_name, subject_num(1~5), question_num(1~100), question_text, image_url,
+            option_1~4, answer(1~4), general_explanation, is_calculation(TRUE/FALSE), step_explanation( '||' 구분자 ) 컬럼을
+            포함한 100행 데이터를 업로드하면 자동으로 검증 후 등록됩니다.
+          </div>
+        ` : ''}
+        ${us && us.status==='parsing' ? `<div class="ok-box">파일을 읽고 유효성을 검증하는 중입니다…</div>` : ''}
+        ${us && us.status==='error' ? `
+          <div class="err-box"><b>업로드가 취소되었습니다 — 다음 오류를 수정 후 다시 시도해주세요:</b><br>
+          ${us.errors.map(e=>'· '+escapeHtml(e)).join('<br>')}</div>
+          ${us.warnings.length ? `<div class="warn-box">${us.warnings.map(w=>'· '+escapeHtml(w)).join('<br>')}</div>` : ''}
+        ` : ''}
+        ${us && us.status==='ready' ? `
+          <div class="ok-box"><b>"${escapeHtml(us.parsed.setName)}"</b> — 총 ${us.parsed.rows.length}문항 검증을 통과했습니다.</div>
+          ${us.warnings.length ? `<div class="warn-box"><b>경고 (등록은 가능하나 확인이 필요합니다):</b><br>${us.warnings.map(w=>'· '+escapeHtml(w)).join('<br>')}</div>` : ''}
+        ` : ''}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-act="closeUpload">취소</button>
+        ${us && us.status==='ready' ? `<button class="btn btn-primary" data-act="confirmUpload">세트 등록하기</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------------------- MODE SELECT ---------------------- */
+function renderModeSelect(){
+  const s = STATE.sets.find(x=>x.id===STATE._pendingSetId);
+  if(!s) return renderHome();
+  return `
+  <button class="btn btn-ghost btn-sm" data-act="home" style="margin-bottom:16px;">← 세트 목록으로</button>
+  <div class="page-title">${escapeHtml(s.name)}</div>
+  <div class="page-sub">${s.total}문항 · 학습 모드를 선택하세요</div>
+  <div class="mode-grid">
+    <div class="card mode-card" data-act="startMode" data-mode="exam" data-id="${s.id}">
+      <span class="tag">EXAM</span>
+      <h3>실전 모드</h3>
+      <p>전체 100문제를 제한 없이 풀이하며, 문제 중간에는 정답이 노출되지 않습니다.
+      '최종 제출' 시 채점되어 과목별 통계와 합격 여부를 확인할 수 있습니다.</p>
+    </div>
+    <div class="card mode-card" data-act="startMode" data-mode="practice" data-id="${s.id}">
+      <span class="tag">PRACTICE</span>
+      <h3>연습 모드</h3>
+      <p>문제별로 답을 선택하고 '정답 확인'을 누르면 즉시 O/X와 해설을 볼 수 있습니다.
+      계산 문제는 단계별 풀이 팝업으로 학습할 수 있습니다.</p>
+    </div>
+  </div>`;
+}
+
+/* ---------------------- QUIZ ---------------------- */
+function renderQuiz(){
+  const sess = STATE.session;
+  const q = currentQ();
+  const total = sess.list.length;
+  const idx = sess.idx;
+
+  const navBtns = sess.list.map((item,i) => {
+    let cls = 'qnav-btn';
+    if(i === idx) cls += ' cur';
+    if(sess.mode === 'practice' && item.checked){
+      cls += item.correct ? ' correct' : ' incorrect';
+    } else if(item.userAnswer !== null){
+      cls += ' answered';
+    }
+    return `<button class="${cls}" data-act="jumpQ" data-i="${i}">${item.qnum}</button>`;
+  }).join('');
+
+  const answeredCount = sess.list.filter(x=>x.userAnswer!==null).length;
+
+  const subjectLabel = SUBJECT_NAMES[q.subject] ? `제${q.subject}과목 · ${SUBJECT_NAMES[q.subject]}` : ('과목 ' + q.subject);
+  const setNameLabel = q._setName || sess.setName;
+
+  const notesPromiseMark = STATE._noteFlags && STATE._noteFlags[qid(q._setId||sess.setId, q.subject, q.qnum)];
+  const bookmarked = notesPromiseMark ? notesPromiseMark.bookmarked : false;
+  const wrongCount = notesPromiseMark ? notesPromiseMark.wrongCount : 0;
+
+  const options = q.options.map((opt,i) => {
+    const n = i+1;
+    let cls = 'opt';
+    const locked = sess.mode === 'practice' && q.checked;
+    if(q.userAnswer === n && !locked) cls += ' selected';
+    if(locked){
+      if(n === q.answer) cls += ' reveal-correct';
+      else if(n === q.userAnswer) cls += ' reveal-wrong';
+    }
+    return `<button class="${cls}" ${locked?'disabled':''} data-act="selectOpt" data-n="${n}">
+      <span class="num">${n}</span><span>${escapeHtml(opt)}</span>
+    </button>`;
+  }).join('');
+
+  let feedbackHtml = '';
+  if(sess.mode === 'practice' && q.checked){
+    feedbackHtml = `
+      <div class="feedback ${q.correct?'ok':'no'}">${q.correct ? '⭘ 정답입니다' : '✕ 오답입니다 (정답: '+q.answer+'번)'}</div>
+      <div class="explain-box"><b>해설.</b> ${escapeHtml(q.general_explanation)}</div>
+      ${q.is_calculation ? `<button class="btn btn-primary btn-sm" data-act="openCalc" style="margin-bottom:16px;">📐 단계별 풀이 보기</button>` : ''}
+    `;
+  }
+
+  const progressPct = Math.round(((idx+1)/total)*100);
+
+  return `
+  <div class="quiz-shell">
+    <div class="quiz-progressbar">
+      <button class="btn btn-ghost btn-sm navopen-btn" data-act="openNav">☰ ${idx+1}/${total}</button>
+      <div class="progress-track"><div class="progress-fill" style="width:${progressPct}%"></div></div>
+      ${sess.mode==='exam' ? `<button class="btn btn-primary btn-sm" data-act="submitExam">최종 제출</button>`
+                            : `<button class="btn btn-primary btn-sm" data-act="finishPractice">종료·결과</button>`}
+    </div>
+
+    <div class="card quiz-main">
+      <div class="q-top">
+        <div class="q-index">${subjectLabel} &nbsp;·&nbsp; 원문제 ${q.qnum}번</div>
+        <div class="q-badges">
+          ${wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${wrongCount}회</span>` : ''}
+          ${q.is_calculation ? `<span class="badge badge-calc">계산문제</span>` : ''}
+          <span class="badge badge-mark ${bookmarked?'active':''}" data-act="toggleMark">${bookmarked?'★ 마킹됨':'☆ 마킹'}</span>
+        </div>
+      </div>
+
+      <div class="q-text">${escapeHtml(q.question_text)}</div>
+      ${q.image_url ? `
+        <div class="q-diagram-wrap">
+          <img src="images/${encodeURIComponent(q.image_url)}" alt="도식 이미지" class="q-diagram-img"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+          <div class="q-image-note" style="display:none;">🖼 이미지 파일이 아직 없습니다 — <b>images/${escapeHtml(q.image_url)}</b> 경로에 파일을 추가하면 여기에 표시됩니다.</div>
+        </div>
+      ` : ''}
+
+      <div class="options">${options}</div>
+
+      ${feedbackHtml}
+
+      <div class="quiz-footer">
+        <div class="quiz-footer-left">
+          <button class="btn btn-sm" data-act="prevQ" ${idx===0?'disabled':''}>← 이전</button>
+          <button class="btn btn-sm" data-act="nextQ" ${idx===total-1?'disabled':''}>다음 →</button>
+        </div>
+        <div class="quiz-footer-right">
+          ${sess.mode==='practice' && !q.checked ? `<button class="btn btn-primary" data-act="checkAnswer" ${q.userAnswer===null?'disabled':''}>정답 확인</button>` : ''}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function navModalHTML(){
+  const sess = STATE.session;
+  const idx = sess.idx;
+  const total = sess.list.length;
+  const answeredCount = sess.list.filter(x=>x.userAnswer!==null).length;
+  const navBtns = sess.list.map((item,i) => {
+    let cls = 'qnav-btn';
+    if(i === idx) cls += ' cur';
+    if(sess.mode === 'practice' && item.checked){
+      cls += item.correct ? ' correct' : ' incorrect';
+    } else if(item.userAnswer !== null){
+      cls += ' answered';
+    }
+    return `<button class="${cls}" data-act="jumpQ" data-i="${i}">${item.qnum}</button>`;
+  }).join('');
+
+  return `
+  <div class="overlay" data-act="overlayCloseNav">
+    <div class="modal" data-stop="1" style="max-width:460px;">
+      <div class="modal-head">
+        <div>
+          <h3>문항 목록</h3>
+          <div class="mono" style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">${escapeHtml(sess.setName)} · ${answeredCount}/${total} 답변완료</div>
+        </div>
+        <button class="icon-x" data-act="closeNav">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="qnav-grid">${navBtns}</div>
+        <div class="qnav-legend">
+          <span><span class="swatch" style="background:var(--slate-soft); border:1px solid var(--slate);"></span>답변완료</span>
+          <span><span class="swatch" style="background:var(--ok-soft); border:1px solid var(--ok);"></span>정답(연습모드)</span>
+          <span><span class="swatch" style="background:var(--danger-soft); border:1px solid var(--danger);"></span>오답(연습모드)</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function calcModalHTML(){
+  const cm = STATE.calcModal;
+  const dots = cm.steps.map((_,i)=>`<span class="step-dot ${i<=cm.stepIdx?'done':''}"></span>`).join('');
+  return `
+  <div class="overlay">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-head">
+        <h3>📐 단계별 풀이</h3>
+        <button class="icon-x" data-act="closeCalc">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="step-counter">STEP ${cm.stepIdx+1} / ${cm.steps.length}</div>
+        <div class="step-box mono">${escapeHtml(cm.steps[cm.stepIdx])}</div>
+        <div class="step-dots">${dots}</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-primary" data-act="calcNext">${cm.stepIdx < cm.steps.length-1 ? '다음 단계 →' : '완료'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------------------- RESULT ---------------------- */
+function renderResult(){
+  const r = STATE.lastResult;
+  const pct = Math.round((r.correct/r.total)*100);
+  const gaugeR = 54, gaugeC = 2*Math.PI*gaugeR;
+  const dashOffset = gaugeC * (1 - Math.min(r.correct,100)/100);
+  const passX = 54 + gaugeR*Math.cos((60/100*360-90)*Math.PI/180);
+  const passY = 54 + gaugeR*Math.sin((60/100*360-90)*Math.PI/180);
+
+  const subjRows = [1,2,3,4,5].map(s => {
+    const d = r.subjects[s];
+    if(!d || d.total===0) return '';
+    const w = Math.round((d.correct/d.total)*100);
+    const failFlag = d.correct < SUBJECT_PASS_MIN;
+    const threshPct = (SUBJECT_PASS_MIN/d.total)*100;
+    return `<tr>
+      <td>제${s}과목<br><span style="color:var(--ink-soft); font-weight:400; font-size:11.5px;">${SUBJECT_NAMES[s]}</span></td>
+      <td>
+        <div class="bar-track">
+          <div class="bar-fill ${failFlag?'danger':''}" style="width:${w}%"></div>
+          <div class="bar-threshold" style="left:${threshPct}%" title="과락 기준선 (8/20)"></div>
+        </div>
+      </td>
+      <td class="mono">${d.correct} / ${d.total}</td>
+      <td>${failFlag ? '<span class="subj-fail">과락</span>' : '<span class="subj-pass">통과</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <button class="btn btn-ghost btn-sm" data-act="home" style="margin-bottom:16px;">← 세트 목록으로</button>
+  <div class="page-title">${escapeHtml(r.setName)} — 학습 결과</div>
+  <div class="page-sub">${r.mode==='exam'?'실전 모드':'연습 모드'} 채점 결과입니다</div>
+
+  <div class="card score-hero">
+    <div class="gauge-wrap">
+      <svg width="120" height="120" viewBox="0 0 108 108">
+        <circle cx="54" cy="54" r="${gaugeR}" fill="none" stroke="var(--surface-2)" stroke-width="10"/>
+        <circle cx="54" cy="54" r="${gaugeR}" fill="none" stroke="${r.pass?'var(--ok)':(r.isFullSet?'var(--danger)':'var(--pine)')}" stroke-width="10"
+          stroke-dasharray="${gaugeC}" stroke-dashoffset="${dashOffset}" stroke-linecap="round" transform="rotate(-90 54 54)"/>
+        ${r.isFullSet ? `<circle cx="${passX}" cy="${passY}" r="3.4" fill="var(--amber)"/>` : ''}
+      </svg>
+    </div>
+    <div class="score-info">
+      <div class="big mono">${r.correct}<span> / ${r.total} 문항 정답 (${pct}%)</span></div>
+      ${r.isFullSet ? `
+        <span class="result-badge ${r.pass?'pass':'fail'}">${r.pass ? '합격 예상' : '불합격 (과락 또는 총점 미달)'}</span>
+        <div class="result-reason">합격 기준: 총점 ${PASS_TOTAL}점 이상 &amp; 과목별 ${SUBJECT_PASS_MIN}문항(40%) 이상 정답.
+        ${r.subjFail ? ' 일부 과목이 과락 기준에 미달했습니다 (아래 표의 붉은 막대 확인).' : (r.correct<PASS_TOTAL ? ' 총점이 기준에 미달했습니다.' : ' 모든 조건을 충족했습니다.')}</div>
+      ` : `<div class="result-reason">오답 다시 풀기 또는 일부 문항 학습 결과입니다. 전체 100문항 세트를 실전/연습 모드로 풀면 합격 여부가 표시됩니다.</div>`}
+    </div>
+  </div>
+
+  ${r.isFullSet ? `
+  <div class="card" style="padding:20px 24px; margin-bottom:20px;">
+    <table class="subject-table">
+      <thead><tr><th>과목</th><th>정답률 (⌇ = 과락 기준선)</th><th>정답</th><th>판정</th></tr></thead>
+      <tbody>${subjRows}</tbody>
+    </table>
+  </div>` : ''}
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <button class="btn btn-primary" data-act="wrongnote">오답노트로 이동</button>
+    <button class="btn" data-act="home">세트 목록으로</button>
+  </div>
+  `;
+}
+
+/* ---------------------- WRONG NOTE ---------------------- */
+async function renderWrongNoteView(){
+  // fetched async in loadAndRenderWrongNote; this fn is placeholder in switch, real work below
+  return '<div class="empty">불러오는 중…</div>';
+}
+
+async function goWrongNote(){
+  STATE.view = 'wrongnote';
+  render();
+  const notes = await getNotes();
+  STATE._notesCache = notes;
+  renderWrongNoteBody();
+}
+
+function renderWrongNoteBody(){
+  const notes = STATE._notesCache || {};
+  const all = Object.keys(notes).map(k => ({id:k, ...notes[k]}));
+  let list;
+  if(STATE.wrongFilter === 'freq') list = all.filter(n => n.wrongCount >= 3 && !n.resolved);
+  else if(STATE.wrongFilter === 'bookmark') list = all.filter(n => n.bookmarked);
+  else list = all.filter(n => n.wrongCount > 0 && !n.resolved);
+
+  list.sort((a,b) => (b.wrongCount - a.wrongCount) || (b.lastWrongAt||0)-(a.lastWrongAt||0));
+
+  const activeWrongCount = all.filter(n=>n.wrongCount>0 && !n.resolved).length;
+  const freqCount = all.filter(n=>n.wrongCount>=3 && !n.resolved).length;
+  const bookmarkCount = all.filter(n=>n.bookmarked).length;
+
+  const items = list.map(n => {
+    const s = n.snapshot;
+    return `
+    <div class="card wrong-item">
+      <div class="wrong-item-top">
+        <div>
+          <div class="wrong-item-meta">
+            <span>${escapeHtml(s.setName||'')}</span>
+            <span>제${s.subject}과목</span>
+            <span>#${s.qnum}</span>
+            ${n.wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${n.wrongCount}회</span>` : (n.wrongCount>0?`<span class="badge badge-calc">오답 ${n.wrongCount}회</span>`:'')}
+          </div>
+          <div class="wrong-item-q">${escapeHtml(s.question_text)}</div>
+        </div>
+        <button class="star-btn ${n.bookmarked?'on':''}" data-act="toggleMarkNote" data-id="${n.id}">${n.bookmarked?'★':'☆'}</button>
+      </div>
+      <div class="wrong-item-actions">
+        <button class="btn btn-sm btn-primary" data-act="retrySingle" data-id="${n.id}">다시 풀기</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const body = `
+    <div class="page-title">오답노트</div>
+    <div class="page-sub">틀린 문제를 모아서 다시 풀고, 중요한 문제는 마킹해 시험 직전 최종 점검에 활용하세요</div>
+
+    <div class="filter-tabs">
+      <button class="filter-tab ${STATE.wrongFilter==='all'?'active':''}" data-act="wfilter" data-f="all">전체 오답 (${activeWrongCount})</button>
+      <button class="filter-tab ${STATE.wrongFilter==='freq'?'active':''}" data-act="wfilter" data-f="freq">⚠ 빈번 오답 3회+ (${freqCount})</button>
+      <button class="filter-tab ${STATE.wrongFilter==='bookmark'?'active':''}" data-act="wfilter" data-f="bookmark">★ 마킹한 문제 (${bookmarkCount})</button>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <button class="btn btn-primary" data-act="retryAllWrong" ${list.length===0?'disabled':''}>이 목록 전체 다시 풀기 (${list.length}문항)</button>
+    </div>
+
+    ${list.length ? items : `<div class="empty">해당 조건에 맞는 문제가 없습니다.</div>`}
+  `;
+  const mainEl = document.querySelector('main');
+  if(mainEl) mainEl.innerHTML = body;
+  bindEvents();
+}
+
+/* ---------------------- utils ---------------------- */
+function escapeHtml(str){
+  return (str===null||str===undefined?'':String(str))
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function goHome(){ STATE.view='home'; STATE.activeSet=null; STATE.session=null; render(); }
+
+/* ---------------------- event binding ---------------------- */
+function bindEvents(){
+  document.querySelectorAll('[data-act]').forEach(el => {
+    el.onclick = async (e) => {
+      const act = el.getAttribute('data-act');
+      switch(act){
+        case 'home': goHome(); break;
+        case 'wrongnote': goWrongNote(); break;
+        case 'openSync': STATE.syncModal = true; render(); break;
+        case 'closeSync': STATE.syncModal = false; render(); break;
+        case 'overlayCloseSync': if(e.target === el){ STATE.syncModal = false; render(); } break;
+        case 'saveNickname': {
+          const input = document.getElementById('syncNickname');
+          setNickname(input ? input.value.trim() : '');
+          STATE.toast = '닉네임이 저장되었습니다. 이후 변경사항부터 자동으로 클라우드에 백업됩니다.';
+          STATE.syncModal = false;
+          render();
+          setTimeout(()=>{ STATE.toast=null; render(); }, 2600);
+          cloudPush();
+          break;
+        }
+        case 'cloudPullNow': {
+          const input = document.getElementById('syncNickname');
+          if(input) setNickname(input.value.trim());
+          const r = await cloudPull();
+          STATE.toast = r.ok ? (r.found ? '클라우드에서 불러왔습니다.' : '클라우드에 저장된 기록이 없습니다.') : '불러오기에 실패했습니다 (네트워크/설정을 확인해주세요).';
+          STATE.syncModal = false;
+          render();
+          setTimeout(()=>{ STATE.toast=null; render(); }, 2600);
+          break;
+        }
+        case 'openUpload': openUpload(); break;
+        case 'closeUpload': STATE.uploadModal=false; STATE.uploadState=null; render(); break;
+        case 'overlayClose': if(e.target === el) { STATE.uploadModal=false; STATE.uploadState=null; render(); } break;
+        case 'confirmUpload': confirmUpload(); break;
+        case 'openMode': STATE._pendingSetId = el.getAttribute('data-id'); STATE.view='mode'; render(); break;
+        case 'deleteSet': deleteSet(el.getAttribute('data-id')); break;
+        case 'startMode': {
+          const mode = el.getAttribute('data-mode');
+          const id = el.getAttribute('data-id');
+          await preloadNoteFlags(id);
+          startSet(id, mode);
+          break;
+        }
+        case 'openNav': STATE.navModal = true; render(); break;
+        case 'closeNav': STATE.navModal = false; render(); break;
+        case 'overlayCloseNav': if(e.target === el){ STATE.navModal = false; render(); } break;
+        case 'jumpQ': gotoIdx(Number(el.getAttribute('data-i'))); break;
+        case 'selectOpt': selectOption(Number(el.getAttribute('data-n'))); break;
+        case 'checkAnswer': checkAnswer(); break;
+        case 'nextQ': nextQ(); break;
+        case 'prevQ': prevQ(); break;
+        case 'submitExam': submitExam(); break;
+        case 'finishPractice': finishPracticeSet(); break;
+        case 'openCalc': openCalcModal(); break;
+        case 'closeCalc': closeCalcModal(); break;
+        case 'calcNext': calcNext(); break;
+        case 'toggleMark': {
+          const q = currentQ();
+          const setId = q._setId || STATE.session.setId;
+          await toggleBookmark(setId, q);
+          await preloadNoteFlags(setId, true);
+          render();
+          break;
+        }
+        case 'wfilter': STATE.wrongFilter = el.getAttribute('data-f'); renderWrongNoteBody(); break;
+        case 'toggleMarkNote': {
+          const id = el.getAttribute('data-id');
+          const notes = STATE._notesCache;
+          notes[id].bookmarked = !notes[id].bookmarked;
+          await sSet('notes', notes);
+  cloudPush();
+          renderWrongNoteBody();
+          break;
+        }
+        case 'retrySingle': {
+          const id = el.getAttribute('data-id');
+          const n = STATE._notesCache[id];
+          startWrongOnly([n]);
+          break;
+        }
+        case 'retryAllWrong': {
+          const notes = STATE._notesCache;
+          const all = Object.keys(notes).map(k => ({id:k, ...notes[k]}));
+          let list;
+          if(STATE.wrongFilter === 'freq') list = all.filter(n => n.wrongCount >= 3 && !n.resolved);
+          else if(STATE.wrongFilter === 'bookmark') list = all.filter(n => n.bookmarked);
+          else list = all.filter(n => n.wrongCount > 0 && !n.resolved);
+          startWrongOnly(list);
+          break;
+        }
+      }
+    };
+  });
+
+  const fileInput = document.getElementById('fileInput');
+  if(fileInput){
+    fileInput.onchange = (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); };
+  }
+  document.querySelectorAll('[data-stop]').forEach(el => { el.onclick = (e) => e.stopPropagation(); });
+}
+
+async function preloadNoteFlags(setId){
+  const notes = await getNotes();
+  STATE._noteFlags = notes;
+}
+
+init();
+</script>
+</body>
+</html>
