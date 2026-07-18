@@ -7,10 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<!-- 선택 사항: 같은 폴더에 ghg_config.js 파일을 만들어 window.GHG_CLOUD_ENDPOINT를 설정하면
-     Google Apps Script를 통한 기기 간 클라우드 동기화가 활성화됩니다.
-     (gamify_config.js / apps_script_Code_gs.txt와 동일한 패턴, 없어도 앱은 정상 동작합니다) -->
-<script src="ghg_config.js" onerror="console.info('[ghg] ghg_config.js 없음 — 클라우드 동기화 비활성 상태로 동작합니다.')"></script>
 <style>
   :root{
     --bg:#F1F4F1;
@@ -54,11 +50,44 @@
   .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px;}
   .brand .dot{width:10px;height:10px;border-radius:50%;background:#7FD9A8; box-shadow:0 0 0 3px rgba(127,217,168,.25);}
   .brand small{display:block; font-weight:400; font-size:11.5px; color:#B9D6C4; letter-spacing:.3px;}
-  .topbar-actions{display:flex; gap:8px; align-items:center;}
+  .topbar-actions{display:flex; gap:10px; align-items:center;}
   .pill{
     font-size:12px; padding:5px 10px; border-radius:999px; background:rgba(255,255,255,.1);
     color:#DDEEE4; font-family:'IBM Plex Mono',monospace;
   }
+  /* prominent topbar nav buttons: 세트목록 / 오답노트 / 동기화 */
+  .btn-top{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:9px 15px; border-radius:9px; font-size:13.5px; font-weight:800;
+    border:1.5px solid rgba(255,255,255,.35); background:rgba(255,255,255,.08); color:#fff;
+    cursor:pointer; font-family:inherit; transition:all .12s ease;
+  }
+  .btn-top:hover{background:rgba(255,255,255,.2); border-color:#fff;}
+  .btn-top .ic{font-size:15px; line-height:1;}
+  .btn-top.accent{background:#7FD9A8; border-color:#7FD9A8; color:var(--pine-dark);}
+  .btn-top.accent:hover{background:#69cf98;}
+  .btn-top.syncing{opacity:.7; pointer-events:none;}
+  .btn-top .ic.spin{display:inline-block; animation:spin 1s linear infinite;}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+
+  /* upload modal tabs (local / github) */
+  .upload-tabs{display:flex; gap:6px; margin-bottom:16px; border-bottom:1px solid var(--line);}
+  .upload-tab{padding:9px 4px; margin-right:14px; border:none; background:none; cursor:pointer; font-family:inherit;
+    font-size:13.5px; font-weight:700; color:var(--ink-soft); border-bottom:2px solid transparent; margin-bottom:-1px;}
+  .upload-tab.active{color:var(--pine-dark); border-bottom-color:var(--pine);}
+  .gh-field{margin-bottom:10px;}
+  .gh-field label{display:block; font-size:12px; font-weight:700; color:var(--ink-soft); margin-bottom:4px;}
+  .gh-field input{width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:7px; font-size:13.5px; font-family:inherit; background:var(--surface);}
+  .gh-file-list{margin-top:12px; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .gh-file-row{display:flex; justify-content:space-between; align-items:center; padding:10px 12px; font-size:13px; border-bottom:1px solid var(--line); cursor:pointer;}
+  .gh-file-row:last-child{border-bottom:none;}
+  .gh-file-row:hover{background:var(--pine-soft);}
+  .gh-file-row .pick{color:var(--pine); font-weight:700; font-size:12px; flex-shrink:0; margin-left:10px;}
+  .gh-file-note{padding:12px; font-size:12.5px; color:var(--ink-soft);}
+  .set-pick-list{display:flex; flex-direction:column; gap:6px; margin-top:10px; max-height:220px; overflow:auto;}
+  .set-pick-row{display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:7px; font-size:13px;}
+  .set-pick-row.err{border-color:#E2B4AC; background:var(--danger-soft);}
+  .set-pick-row.warn{border-color:#E9CE9C; background:#FBF3E4;}
 
   main{flex:1; padding:28px 24px 60px; max-width:1180px; margin:0 auto; width:100%;}
 
@@ -173,8 +202,6 @@
 
   .q-text{font-size:16px; line-height:1.65; font-weight:600; margin-bottom:14px; white-space:pre-wrap;}
   .q-image-note{border:1px dashed var(--line); background:var(--surface-2); color:var(--ink-soft); font-size:12px; padding:10px 14px; border-radius:8px; margin-bottom:16px;}
-  .q-diagram-wrap{margin-bottom:16px;}
-  .q-diagram-img{max-width:100%; border-radius:8px; border:1px solid var(--line); display:block;}
 
   .options{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
   .opt{
@@ -246,26 +273,11 @@
 <script>
 /* =========================================================================
    온실가스 관리기사 학습 플랫폼 — single-file app
-   Storage: browser localStorage (works on GitHub Pages / any static host),
-   with an OPTIONAL Google Apps Script cloud-sync layer for cross-device
-   backup — same pattern as gamify_config.js / gamify.js in this project.
-   To enable cloud sync, create a sibling file "ghg_config.js" with:
-     window.GHG_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/.../exec';
-   and load it BEFORE this script tag. The existing apps_script_Code_gs.txt
-   backend (doGet/doPost keyed by "nickname") can be reused as-is — this app
-   just sends a namespaced nickname ("ghg::<입력한 이름>") so its profile rows
-   never collide with the language-game profiles stored in the same sheet.
-
-   localStorage keys (all prefixed "ghg_" to avoid clashing with the other
-   games sharing this origin):
-     - "ghg_qsets_index"     -> [{id,name,uploadedAt,total,calcCount}]
-     - "ghg_qset_<id>"       -> {id,name,uploadedAt,questions:[...]}
-     - "ghg_notes"           -> { [qid]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot} }
-     - "ghg_results_history" -> [{ts,setId,setName,mode,total,score,subjects,pass}]
-     - "ghg_nickname"        -> string (cloud sync identity, optional)
-   Only "notes" + "results_history" (the learner's progress) are pushed to
-   the cloud — question sets themselves are re-uploaded per device from the
-   .xlsx files and are not synced (keeps payload small).
+   Storage schema (window.storage, all personal / shared:false):
+     - "qsets_index"  -> [{id,name,uploadedAt,total,calcCount}]
+     - "qset_<id>"    -> {id,name,uploadedAt,questions:[...]}
+     - "notes"        -> { [qid]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot} }
+     - "results_history" -> [{ts,setId,setName,mode,total,score,subjects,pass}]
    ========================================================================= */
 
 const SUBJECT_NAMES = {
@@ -277,7 +289,6 @@ const SUBJECT_NAMES = {
 };
 const PASS_TOTAL = 60;
 const SUBJECT_PASS_MIN = 8; // 과목별 20문항 중 8문제(40%) 미만 = 과락 -> 8개 이상 정답해야 통과
-const LS_PREFIX = 'ghg_';
 
 let STATE = {
   view: 'home',            // home | mode | quiz | result | wrongnote
@@ -289,68 +300,25 @@ let STATE = {
   calcModal: null,         // {steps, stepIdx}
   navModal: false,
   uploadModal: false,
-  uploadState: null,       // {status, errors, warnings, parsed}
-  syncModal: false,
+  uploadState: null,       // {status, errors, warnings, parsed:[{setName,rows}, ...]}
+  uploadTab: 'local',      // local | github
+  gh: {owner:'', repo:'', path:'', branch:'', files:null, listing:false, loadingFile:null, error:null},
+  syncing: false,
   toast: null
 };
 
-/* ---------------------- local storage helpers (sync API kept async for drop-in compatibility) ---------------------- */
+/* ---------------------- storage helpers ---------------------- */
 async function sGet(key){
-  try{ const raw = localStorage.getItem(LS_PREFIX + key); return raw ? JSON.parse(raw) : null; }
+  try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; }
   catch(e){ return null; }
 }
 async function sSet(key, value){
-  try{ localStorage.setItem(LS_PREFIX + key, JSON.stringify(value)); return true; }
+  try{ await window.storage.set(key, JSON.stringify(value)); return true; }
   catch(e){ console.error('storage set failed', key, e); return false; }
-}
-async function sDelete(key){
-  try{ localStorage.removeItem(LS_PREFIX + key); return true; }
-  catch(e){ return false; }
 }
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function qid(setId, subject, qnum){ return setId + '::' + subject + '::' + qnum; }
-
-/* ---------------------- optional cloud sync (Google Apps Script) ---------------------- */
-function cloudEndpoint(){
-  return (typeof window.GHG_CLOUD_ENDPOINT === 'string' && window.GHG_CLOUD_ENDPOINT) ? window.GHG_CLOUD_ENDPOINT.trim() : '';
-}
-function getNickname(){ try{ return localStorage.getItem(LS_PREFIX+'nickname') || ''; }catch(e){ return ''; } }
-function setNickname(n){ try{ localStorage.setItem(LS_PREFIX+'nickname', n||''); }catch(e){} }
-function cloudRowKey(nickname){ return 'ghg::' + nickname; }
-function isCloudConfigured(){ return !!cloudEndpoint(); }
-
-async function cloudPush(){
-  const url = cloudEndpoint();
-  const nickname = getNickname();
-  if(!url || !nickname) return;
-  try{
-    const notes = await sGet('notes') || {};
-    const history = await sGet('results_history') || [];
-    const payload = { nickname: cloudRowKey(nickname), app:'ghg_profile', notes, resultsHistory: history, updatedAt: Date.now() };
-    await fetch(url, {
-      method:'POST',
-      headers:{ 'Content-Type':'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
-      body: JSON.stringify(payload)
-    });
-  }catch(e){ console.error('[ghg] cloud push failed', e); /* offline/오류 시 조용히 무시 */ }
-}
-
-async function cloudPull(){
-  const url = cloudEndpoint();
-  const nickname = getNickname();
-  if(!url || !nickname) return {ok:false, reason:'no-endpoint-or-nickname'};
-  try{
-    const res = await fetch(url + '?action=get&nickname=' + encodeURIComponent(cloudRowKey(nickname)));
-    const json = await res.json();
-    if(json && json.found && json.data){
-      if(json.data.notes) await sSet('notes', json.data.notes);
-      if(json.data.resultsHistory) await sSet('results_history', json.data.resultsHistory);
-      return {ok:true, found:true};
-    }
-    return {ok:true, found:false};
-  }catch(e){ console.error('[ghg] cloud pull failed', e); return {ok:false, reason:'network'}; }
-}
 
 /* ---------------------- init ---------------------- */
 async function init(){
@@ -360,19 +328,9 @@ async function init(){
 }
 
 /* ---------------------- excel parsing ---------------------- */
-function parseWorkbook(arrayBuffer){
-  const wb = XLSX.read(arrayBuffer, {type:'array'});
-  let dataSheet = null;
-  for(const name of wb.SheetNames){
-    const ws = wb.Sheets[name];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
-    if(rows.length && Array.isArray(rows[0]) && rows[0].some(c => (''+c).trim() === 'set_name')){
-      dataSheet = rows;
-      break;
-    }
-  }
-  if(!dataSheet) throw new Error('업로드 규격(set_name 등 컬럼 헤더)을 찾을 수 없습니다. 기능정의서의 엑셀 템플릿 형식을 확인해주세요.');
-
+// 하나의 엑셀 파일 안에 여러 회차를 Sheet로 나눠 담아도 되도록,
+// set_name 등 규격 헤더를 가진 시트를 모두 찾아 각각 하나의 세트로 파싱한다.
+function parseSheetRows(dataSheet){
   const headerRow = dataSheet[0].map(h => (h===null||h===undefined) ? '' : (''+h).trim());
   const colIdx = {};
   headerRow.forEach((h,i) => { if(h) colIdx[h] = i; });
@@ -410,7 +368,27 @@ function parseWorkbook(arrayBuffer){
       steps: (isCalc && stepRaw) ? (''+stepRaw).split('||').map(s=>s.trim()).filter(Boolean) : []
     });
   }
-  return { setName: rows.length ? rows[0].set_name : '이름없는 세트', rows };
+  return rows;
+}
+
+function parseWorkbook(arrayBuffer){
+  const wb = XLSX.read(arrayBuffer, {type:'array'});
+  const found = [];
+  for(const name of wb.SheetNames){
+    const ws = wb.Sheets[name];
+    const rows2d = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+    if(rows2d.length && Array.isArray(rows2d[0]) && rows2d[0].some(c => (''+c).trim() === 'set_name')){
+      found.push({sheetName:name, rows2d});
+    }
+  }
+  if(!found.length) throw new Error('업로드 규격(set_name 등 컬럼 헤더)을 찾을 수 없습니다. 기능정의서의 엑셀 템플릿 형식을 확인해주세요.');
+
+  const results = found.map(f => {
+    const rows = parseSheetRows(f.rows2d);
+    const setName = rows.length ? (rows[0].set_name || f.sheetName) : f.sheetName;
+    return { sheetName: f.sheetName, setName, rows };
+  });
+  return results; // array, even for a single-sheet file
 }
 
 function validateRows(rows){
@@ -442,38 +420,54 @@ function validateRows(rows){
   return {errors, warnings};
 }
 
-async function handleFile(file){
-  STATE.uploadState = {status:'parsing', errors:[], warnings:[], parsed:null};
+// 로컬 파일 업로드 / 깃허브 불러오기가 공유하는 처리 로직.
+// 파일 하나에 세트가 여러 개(Sheet로 구분) 들어있어도 각각 별도 세트로 검증한다.
+async function processWorkbookBuffer(buf, sourceLabel){
+  STATE.uploadState = {status:'parsing', parsed:null, sourceLabel: sourceLabel||''};
   render();
   try{
-    const buf = await file.arrayBuffer();
-    const {setName, rows} = parseWorkbook(buf);
-    const {errors, warnings} = validateRows(rows);
-    STATE.uploadState = {status: errors.length ? 'error' : 'ready', errors, warnings, parsed:{setName, rows}};
+    const sheets = parseWorkbook(buf); // [{sheetName, setName, rows}, ...]
+    const parsed = sheets.map(s => {
+      const {errors, warnings} = validateRows(s.rows);
+      return {...s, errors, warnings};
+    });
+    const anyValid = parsed.some(p => p.errors.length === 0);
+    STATE.uploadState = {status: anyValid ? 'ready' : 'error', parsed, sourceLabel: sourceLabel||''};
   }catch(e){
-    STATE.uploadState = {status:'error', errors:[e.message || '파일을 읽는 중 오류가 발생했습니다.'], warnings:[], parsed:null};
+    STATE.uploadState = {status:'error', parsed:null, fatalError: e.message || '파일을 읽는 중 오류가 발생했습니다.', sourceLabel: sourceLabel||''};
   }
   render();
 }
 
+async function handleFile(file){
+  await processWorkbookBuffer(await file.arrayBuffer(), file.name);
+}
+
 async function confirmUpload(){
-  const {parsed} = STATE.uploadState;
-  if(!parsed) return;
-  const id = uid('set');
-  const questions = parsed.rows.map(r => ({
-    qnum: r.question_num, subject: r.subject_num, question_text: r.question_text,
-    image_url: r.image_url, options: r.options, answer: r.answer,
-    general_explanation: r.general_explanation, is_calculation: r.is_calculation, steps: r.steps
-  })).sort((a,b) => a.qnum - b.qnum);
-  const calcCount = questions.filter(q=>q.is_calculation).length;
-  const setObj = {id, name: parsed.setName || ('세트 ' + (STATE.sets.length+1)), uploadedAt: Date.now(), questions};
-  await sSet('qset_' + id, setObj);
-  const idxEntry = {id, name: setObj.name, uploadedAt: setObj.uploadedAt, total: questions.length, calcCount};
-  STATE.sets = [idxEntry, ...STATE.sets];
+  const us = STATE.uploadState;
+  if(!us || !us.parsed) return;
+  const validSets = us.parsed.filter(p => p.errors.length === 0);
+  if(!validSets.length) return;
+  const newEntries = [];
+  for(const p of validSets){
+    const id = uid('set');
+    const questions = p.rows.map(r => ({
+      qnum: r.question_num, subject: r.subject_num, question_text: r.question_text,
+      image_url: r.image_url, options: r.options, answer: r.answer,
+      general_explanation: r.general_explanation, is_calculation: r.is_calculation, steps: r.steps
+    })).sort((a,b) => a.qnum - b.qnum);
+    const calcCount = questions.filter(q=>q.is_calculation).length;
+    const setObj = {id, name: p.setName || ('세트 ' + (STATE.sets.length+1)), uploadedAt: Date.now(), questions};
+    await sSet('qset_' + id, setObj);
+    newEntries.push({id, name: setObj.name, uploadedAt: setObj.uploadedAt, total: questions.length, calcCount});
+  }
+  STATE.sets = [...newEntries, ...STATE.sets];
   await sSet('qsets_index', STATE.sets);
   STATE.uploadModal = false;
   STATE.uploadState = null;
-  STATE.toast = '"' + setObj.name + '" 세트가 등록되었습니다.';
+  STATE.toast = validSets.length > 1
+    ? validSets.length + '개 세트가 등록되었습니다: ' + validSets.map(s=>'"'+s.setName+'"').join(', ')
+    : '"' + validSets[0].setName + '" 세트가 등록되었습니다.';
   render();
   setTimeout(()=>{ STATE.toast=null; render(); }, 2600);
 }
@@ -482,7 +476,7 @@ async function deleteSet(id){
   if(!confirm('이 문제 세트를 삭제하시겠습니까? 저장된 문제 데이터가 삭제됩니다 (오답노트 기록은 유지됩니다).')) return;
   STATE.sets = STATE.sets.filter(s => s.id !== id);
   await sSet('qsets_index', STATE.sets);
-  await sDelete('qset_' + id);
+  try{ await window.storage.delete('qset_' + id); }catch(e){}
   render();
 }
 
@@ -508,7 +502,6 @@ async function recordAnswer(setId, setName, q, isCorrect){
   }
   notes[id] = cur;
   await sSet('notes', notes);
-  cloudPush();
 }
 
 async function toggleBookmark(setId, q){
@@ -524,7 +517,6 @@ async function toggleBookmark(setId, q){
   cur.snapshot = snapshot;
   notes[id] = cur;
   await sSet('notes', notes);
-  cloudPush();
   render();
 }
 
@@ -532,7 +524,6 @@ async function saveResultHistory(entry){
   const hist = (await sGet('results_history')) || [];
   hist.unshift(entry);
   await sSet('results_history', hist.slice(0,50));
-  cloudPush();
 }
 
 /* ---------------------- session control ---------------------- */
@@ -669,8 +660,7 @@ function render(){
     ${STATE.uploadModal ? uploadModalHTML() : ''}
     ${STATE.navModal && STATE.session ? navModalHTML() : ''}
     ${STATE.calcModal ? calcModalHTML() : ''}
-    ${STATE.syncModal ? syncModalHTML() : ''}
-    <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저에 저장되며, 닉네임을 설정하면 선택적으로 클라우드에도 백업됩니다</footer>
+    <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저 계정에만 저장됩니다</footer>
   `;
   bindEvents();
 }
@@ -683,44 +673,9 @@ function topbar(){
       <div>온실가스 관리기사 학습 플랫폼<small>9월 필기시험 대비 · 기출문제 트레이너</small></div>
     </div>
     <div class="topbar-actions">
-      ${STATE.view!=='home' ? `<button class="btn btn-ghost btn-sm" data-act="home">세트 목록</button>` : ''}
-      <button class="btn btn-ghost btn-sm" data-act="wrongnote">오답노트</button>
-      <button class="btn btn-ghost btn-sm" data-act="openSync" title="클라우드 동기화">☁ ${isCloudConfigured() ? (getNickname()?'동기화됨':'설정') : '동기화'}</button>
-    </div>
-  </div>`;
-}
-
-function syncModalHTML(){
-  const url = cloudEndpoint();
-  const nick = getNickname();
-  return `
-  <div class="overlay" data-act="overlayCloseSync">
-    <div class="modal" data-stop="1" style="max-width:460px;">
-      <div class="modal-head">
-        <h3>☁ 클라우드 동기화 (선택)</h3>
-        <button class="icon-x" data-act="closeSync">✕</button>
-      </div>
-      <div class="modal-body">
-        ${url ? `
-          <div class="ok-box">Google Apps Script 엔드포인트가 설정되어 있습니다.</div>
-          <span class="field-label" style="margin-top:14px;">닉네임 (기기 간 동기화 식별용)</span>
-          <input type="text" id="syncNickname" value="${escapeHtml(nick)}" placeholder="예: 민준" style="width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px; font-size:14px;">
-          <div style="font-size:12px; color:var(--ink-soft); margin-top:8px; line-height:1.5;">
-            같은 닉네임을 다른 기기/브라우저에서도 입력하면 오답노트·마킹·학습 결과가 자동으로 저장·불러오기 됩니다. (문제 세트 자체는 기기마다 엑셀로 다시 업로드해야 합니다.)
-          </div>
-        ` : `
-          <div class="warn-box">
-            아직 클라우드 동기화가 설정되지 않았습니다. 이 HTML 파일과 같은 폴더에 <b>ghg_config.js</b> 파일을 만들고 아래처럼 작성한 뒤,
-            <code>&lt;script src="ghg_config.js"&gt;&lt;/script&gt;</code> 한 줄을 이 HTML의 &lt;head&gt;에 추가하면 됩니다.<br><br>
-            <span class="mono">window.GHG_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/…/exec';</span><br><br>
-            이미 다른 게임들에서 쓰고 있는 apps_script_Code_gs.txt를 그대로 재사용할 수 있습니다 (같은 시트에 <code>ghg::닉네임</code> 형태로 별도 행이 저장되어 겹치지 않습니다).
-          </div>
-        `}
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-ghost" data-act="closeSync">닫기</button>
-        ${url ? `<button class="btn" data-act="cloudPullNow">☁ 불러오기</button><button class="btn btn-primary" data-act="saveNickname">저장</button>` : ''}
-      </div>
+      ${STATE.view!=='home' ? `<button class="btn-top" data-act="home"><span class="ic">📚</span>세트 목록</button>` : ''}
+      <button class="btn-top" data-act="wrongnote"><span class="ic">✏️</span>오답노트</button>
+      <button class="btn-top accent ${STATE.syncing?'syncing':''}" data-act="openSync"><span class="ic ${STATE.syncing?'spin':''}">🔄</span>${STATE.syncing?'동기화 중…':'동기화'}</button>
     </div>
   </div>`;
 }
@@ -775,42 +730,161 @@ function renderHome(){
 async function openUpload(){
   STATE.uploadModal = true;
   STATE.uploadState = null;
+  STATE.uploadTab = 'local';
   render();
+}
+
+// 상단 "동기화" 아이콘: 같은 업로드 모달을 깃허브 탭으로 바로 연다.
+async function openSync(){
+  STATE.uploadModal = true;
+  STATE.uploadState = null;
+  STATE.uploadTab = 'github';
+  render();
+  ghAutoDetect();
+}
+
+function ghAutoDetect(){
+  if(STATE.gh.owner || STATE.gh.repo) return; // already filled in once
+  try{
+    const host = location.hostname;
+    if(host.indexOf('.github.io') === -1) return;
+    const owner = host.split('.')[0];
+    const parts = location.pathname.split('/').filter(Boolean);
+    const repo = parts.length ? parts[0] : '';
+    let folderParts = parts.slice(1);
+    if(folderParts.length && folderParts[folderParts.length-1].indexOf('.') !== -1) folderParts = folderParts.slice(0,-1);
+    STATE.gh.owner = owner; STATE.gh.repo = repo; STATE.gh.path = folderParts.join('/');
+    render();
+  }catch(e){ /* best-effort only */ }
+}
+
+function setGhField(field, val){ STATE.gh[field] = val; }
+
+async function ghListFiles(){
+  const owner = (document.getElementById('ghOwner')||{}).value?.trim() || STATE.gh.owner.trim();
+  const repo = (document.getElementById('ghRepo')||{}).value?.trim() || STATE.gh.repo.trim();
+  const path = ((document.getElementById('ghPath')||{}).value || STATE.gh.path || '').trim().replace(/^\/+|\/+$/g,'');
+  const branch = (document.getElementById('ghBranch')||{}).value?.trim() || STATE.gh.branch.trim();
+  STATE.gh = {...STATE.gh, owner, repo, path, branch, files:null, error:null, listing:true};
+  render();
+  if(!owner || !repo){
+    STATE.gh.listing = false;
+    STATE.gh.error = 'GitHub 사용자명과 저장소 이름을 입력해주세요.';
+    render();
+    return;
+  }
+  let apiUrl = 'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contents';
+  if(path) apiUrl += '/' + path.split('/').map(encodeURIComponent).join('/');
+  if(branch) apiUrl += '?ref=' + encodeURIComponent(branch);
+  try{
+    const res = await fetch(apiUrl, {headers:{'Accept':'application/vnd.github+json'}});
+    if(!res.ok){
+      if(res.status===404) throw new Error('저장소나 폴더를 찾을 수 없습니다. 사용자명·저장소·경로를 확인해주세요.');
+      if(res.status===403) throw new Error('GitHub API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+      throw new Error('GitHub에서 파일 목록을 가져오지 못했습니다.');
+    }
+    const items = await res.json();
+    if(!Array.isArray(items)) throw new Error('입력한 경로가 폴더가 아닙니다.');
+    const files = items.filter(it => it.type==='file' && /\.(xlsx|xls)$/i.test(it.name));
+    STATE.gh.files = files;
+  }catch(e){
+    STATE.gh.error = e.message || 'GitHub에서 파일 목록을 가져오는 중 오류가 발생했습니다.';
+    STATE.gh.files = null;
+  }
+  STATE.gh.listing = false;
+  render();
+}
+
+async function ghLoadFile(name, downloadUrl){
+  STATE.gh.loadingFile = name;
+  render();
+  try{
+    const res = await fetch(downloadUrl);
+    if(!res.ok) throw new Error('파일을 다운로드하지 못했습니다.');
+    const buf = await res.arrayBuffer();
+    await processWorkbookBuffer(buf, name + ' (GitHub)');
+  }catch(e){
+    STATE.uploadState = {status:'error', parsed:null, fatalError: e.message || '파일을 불러오는 중 오류가 발생했습니다.'};
+  }
+  STATE.gh.loadingFile = null;
+  render();
+}
+
+function uploadSetSummaryHTML(p, i){
+  const ok = p.errors.length === 0;
+  return `
+  <div class="set-pick-row ${ok?'':(p.errors.length?'err':'warn')}">
+    <span style="font-size:16px;">${ok?'✅':'⛔️'}</span>
+    <div style="flex:1;">
+      <div><b>${escapeHtml(p.setName||p.sheetName)}</b> <span class="mono" style="color:var(--ink-soft); font-size:11.5px;">(시트: ${escapeHtml(p.sheetName)})</span></div>
+      <div style="font-size:12px; color:var(--ink-soft);">${p.rows.length}문항 ${ok?'· 검증 통과':'· 검증 실패 — 이 세트는 제외되고 등록됩니다'}</div>
+      ${p.errors.length ? `<div class="err-box" style="margin-top:6px;">${p.errors.map(e=>'· '+escapeHtml(e)).join('<br>')}</div>` : ''}
+      ${p.warnings.length ? `<div class="warn-box" style="margin-top:6px;">${p.warnings.map(w=>'· '+escapeHtml(w)).join('<br>')}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 function uploadModalHTML(){
   const us = STATE.uploadState;
+  const tab = STATE.uploadTab || 'local';
+  const gh = STATE.gh;
+
+  const localTabHTML = `
+    <span class="field-label">엑셀 파일 선택 (.xlsx)</span>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="font-size:13.5px;">
+    <div class="ok-box" style="margin-top:14px;">
+      규격: set_name, subject_num(1~5), question_num(1~100), question_text, image_url,
+      option_1~4, answer(1~4), general_explanation, is_calculation(TRUE/FALSE), step_explanation( '||' 구분자 ) 컬럼을
+      포함한 100행 데이터를 업로드하면 자동으로 검증 후 등록됩니다.<br><br>
+      <b>여러 회차를 한 파일로 관리하고 싶다면</b> 엑셀 파일 안에 회차별로 Sheet를 나눠(예: "2025_2회" 시트, "2025_3회" 시트) 각 시트에 규격대로 100행씩 넣어도 됩니다 — 시트마다 자동으로 별도 세트로 인식되어 한 번에 등록됩니다.<br><br>
+      <b>도식(그림) 문제 이미지 파일명 규칙</b>: 회차 간 혼선을 막기 위해 image_url에는 <span class="mono">{연도뒤2자리}_{회차}_q{문제번호}.png</span> 형식을 권장합니다. 예) 2025년 2회 49번 도식 문제 → <span class="mono">25_2_q49.png</span>
+    </div>
+  `;
+
+  const githubTabHTML = `
+    <div class="gh-field"><label>사용자/조직</label><input type="text" id="ghOwner" placeholder="예: myid" value="${escapeHtml(gh.owner)}"></div>
+    <div class="gh-field"><label>저장소</label><input type="text" id="ghRepo" placeholder="예: my-repo" value="${escapeHtml(gh.repo)}"></div>
+    <div class="gh-field"><label>폴더 경로</label><input type="text" id="ghPath" placeholder="비워두면 저장소 최상위 폴더" value="${escapeHtml(gh.path)}"></div>
+    <div class="gh-field"><label>브랜치</label><input type="text" id="ghBranch" placeholder="비워두면 기본 브랜치 사용" value="${escapeHtml(gh.branch)}"></div>
+    <div class="ok-box" style="margin-bottom:10px;">공개(public) 저장소만 지원합니다. 어학학습 프로그램과 동일한 방식으로, 폴더 안의 .xlsx/.xls 파일 목록을 불러와 클릭 한 번으로 세트를 등록할 수 있습니다.</div>
+    <button class="btn btn-primary btn-sm" data-act="ghList" ${gh.listing?'disabled':''}>${gh.listing?'불러오는 중…':'엑셀 파일 목록 불러오기'}</button>
+    ${gh.error ? `<div class="err-box" style="margin-top:10px;">${escapeHtml(gh.error)}</div>` : ''}
+    ${gh.files ? (gh.files.length ? `
+      <div class="gh-file-list">
+        ${gh.files.map(f => `
+          <div class="gh-file-row" data-act="ghPick" data-name="${escapeHtml(f.name)}" data-url="${escapeHtml(f.download_url)}">
+            <span>${escapeHtml(f.name)}</span>
+            <span class="pick">${gh.loadingFile===f.name ? '불러오는 중…' : '불러오기 →'}</span>
+          </div>`).join('')}
+      </div>
+    ` : `<div class="gh-file-note">이 폴더에서 .xlsx/.xls 파일을 찾지 못했습니다.</div>`) : ''}
+  `;
+
   return `
   <div class="overlay" data-act="overlayClose">
     <div class="modal" data-stop="1">
       <div class="modal-head">
-        <h3>기출문제 엑셀 업로드</h3>
+        <h3>기출문제 세트 업로드 / 동기화</h3>
         <button class="icon-x" data-act="closeUpload">✕</button>
       </div>
       <div class="modal-body">
-        ${!us ? `
-          <span class="field-label">엑셀 파일 선택 (.xlsx)</span>
-          <input type="file" id="fileInput" accept=".xlsx,.xls" style="font-size:13.5px;">
-          <div class="ok-box" style="margin-top:14px;">
-            규격: set_name, subject_num(1~5), question_num(1~100), question_text, image_url,
-            option_1~4, answer(1~4), general_explanation, is_calculation(TRUE/FALSE), step_explanation( '||' 구분자 ) 컬럼을
-            포함한 100행 데이터를 업로드하면 자동으로 검증 후 등록됩니다.
+        <div class="upload-tabs">
+          <button class="upload-tab ${tab==='local'?'active':''}" data-act="uploadTab" data-t="local">📁 로컬 파일 업로드</button>
+          <button class="upload-tab ${tab==='github'?'active':''}" data-act="uploadTab" data-t="github">🔄 깃허브에서 불러오기</button>
+        </div>
+        ${!us ? (tab==='local' ? localTabHTML : githubTabHTML) : ''}
+        ${us && us.status==='parsing' ? `<div class="ok-box">${us.sourceLabel?escapeHtml(us.sourceLabel)+' — ':''}파일을 읽고 유효성을 검증하는 중입니다…</div>` : ''}
+        ${us && us.status==='error' && us.fatalError ? `<div class="err-box"><b>업로드가 취소되었습니다:</b><br>${escapeHtml(us.fatalError)}</div>` : ''}
+        ${us && us.parsed ? `
+          <div class="${us.status==='ready'?'ok-box':'err-box'}" style="margin-bottom:2px;">
+            <b>${us.parsed.length>1 ? us.parsed.length+'개 세트를 찾았습니다 (시트별로 자동 인식)' : '1개 세트를 찾았습니다'}</b>
           </div>
-        ` : ''}
-        ${us && us.status==='parsing' ? `<div class="ok-box">파일을 읽고 유효성을 검증하는 중입니다…</div>` : ''}
-        ${us && us.status==='error' ? `
-          <div class="err-box"><b>업로드가 취소되었습니다 — 다음 오류를 수정 후 다시 시도해주세요:</b><br>
-          ${us.errors.map(e=>'· '+escapeHtml(e)).join('<br>')}</div>
-          ${us.warnings.length ? `<div class="warn-box">${us.warnings.map(w=>'· '+escapeHtml(w)).join('<br>')}</div>` : ''}
-        ` : ''}
-        ${us && us.status==='ready' ? `
-          <div class="ok-box"><b>"${escapeHtml(us.parsed.setName)}"</b> — 총 ${us.parsed.rows.length}문항 검증을 통과했습니다.</div>
-          ${us.warnings.length ? `<div class="warn-box"><b>경고 (등록은 가능하나 확인이 필요합니다):</b><br>${us.warnings.map(w=>'· '+escapeHtml(w)).join('<br>')}</div>` : ''}
+          <div class="set-pick-list">${us.parsed.map((p,i)=>uploadSetSummaryHTML(p,i)).join('')}</div>
         ` : ''}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-act="closeUpload">취소</button>
-        ${us && us.status==='ready' ? `<button class="btn btn-primary" data-act="confirmUpload">세트 등록하기</button>` : ''}
+        ${us && us.status==='ready' ? `<button class="btn btn-primary" data-act="confirmUpload">검증 통과한 세트 등록하기</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -825,17 +899,17 @@ function renderModeSelect(){
   <div class="page-title">${escapeHtml(s.name)}</div>
   <div class="page-sub">${s.total}문항 · 학습 모드를 선택하세요</div>
   <div class="mode-grid">
+    <div class="card mode-card" data-act="startMode" data-mode="practice" data-id="${s.id}">
+      <span class="tag">PRACTICE</span>
+      <h3>연습 모드</h3>
+      <p>문제별로 답을 선택하고 '정답 확인'을 누르면 즉시 O/X와 해설을 볼 수 있습니다.
+      해설은 답을 고르기 전에도 미리 볼 수 있고, 계산 문제는 단계별 풀이 팝업으로 학습할 수 있습니다.</p>
+    </div>
     <div class="card mode-card" data-act="startMode" data-mode="exam" data-id="${s.id}">
       <span class="tag">EXAM</span>
       <h3>실전 모드</h3>
       <p>전체 100문제를 제한 없이 풀이하며, 문제 중간에는 정답이 노출되지 않습니다.
       '최종 제출' 시 채점되어 과목별 통계와 합격 여부를 확인할 수 있습니다.</p>
-    </div>
-    <div class="card mode-card" data-act="startMode" data-mode="practice" data-id="${s.id}">
-      <span class="tag">PRACTICE</span>
-      <h3>연습 모드</h3>
-      <p>문제별로 답을 선택하고 '정답 확인'을 누르면 즉시 O/X와 해설을 볼 수 있습니다.
-      계산 문제는 단계별 풀이 팝업으로 학습할 수 있습니다.</p>
     </div>
   </div>`;
 }
@@ -888,6 +962,12 @@ function renderQuiz(){
       <div class="explain-box"><b>해설.</b> ${escapeHtml(q.general_explanation)}</div>
       ${q.is_calculation ? `<button class="btn btn-primary btn-sm" data-act="openCalc" style="margin-bottom:16px;">📐 단계별 풀이 보기</button>` : ''}
     `;
+  } else if(sess.mode === 'practice' && !q.checked && q.previewExplain){
+    // 연습 모드에서는 정답을 고르기 전에도 해설을 미리 볼 수 있다.
+    feedbackHtml = `
+      <div class="explain-box"><b>💡 해설 미리보기</b> (정답 확인 전 · 오답노트에는 기록되지 않습니다)<br>${escapeHtml(q.general_explanation)}</div>
+      ${q.is_calculation ? `<button class="btn btn-primary btn-sm" data-act="openCalc" style="margin-bottom:16px;">📐 단계별 풀이 보기</button>` : ''}
+    `;
   }
 
   const progressPct = Math.round(((idx+1)/total)*100);
@@ -912,13 +992,7 @@ function renderQuiz(){
       </div>
 
       <div class="q-text">${escapeHtml(q.question_text)}</div>
-      ${q.image_url ? `
-        <div class="q-diagram-wrap">
-          <img src="images/${encodeURIComponent(q.image_url)}" alt="도식 이미지" class="q-diagram-img"
-               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-          <div class="q-image-note" style="display:none;">🖼 이미지 파일이 아직 없습니다 — <b>images/${escapeHtml(q.image_url)}</b> 경로에 파일을 추가하면 여기에 표시됩니다.</div>
-        </div>
-      ` : ''}
+      ${q.image_url ? `<div class="q-image-note">🖼 도식 이미지: <b>${escapeHtml(q.image_url)}</b> (정적 리소스 경로에 배치된 이미지가 여기에 표시됩니다)</div>` : ''}
 
       <div class="options">${options}</div>
 
@@ -930,6 +1004,7 @@ function renderQuiz(){
           <button class="btn btn-sm" data-act="nextQ" ${idx===total-1?'disabled':''}>다음 →</button>
         </div>
         <div class="quiz-footer-right">
+          ${sess.mode==='practice' && !q.checked ? `<button class="btn btn-sm" data-act="togglePreviewExplain">${q.previewExplain?'해설 숨기기':'💡 해설 미리보기'}</button>` : ''}
           ${sess.mode==='practice' && !q.checked ? `<button class="btn btn-primary" data-act="checkAnswer" ${q.userAnswer===null?'disabled':''}>정답 확인</button>` : ''}
         </div>
       </div>
@@ -1151,33 +1226,14 @@ function bindEvents(){
       switch(act){
         case 'home': goHome(); break;
         case 'wrongnote': goWrongNote(); break;
-        case 'openSync': STATE.syncModal = true; render(); break;
-        case 'closeSync': STATE.syncModal = false; render(); break;
-        case 'overlayCloseSync': if(e.target === el){ STATE.syncModal = false; render(); } break;
-        case 'saveNickname': {
-          const input = document.getElementById('syncNickname');
-          setNickname(input ? input.value.trim() : '');
-          STATE.toast = '닉네임이 저장되었습니다. 이후 변경사항부터 자동으로 클라우드에 백업됩니다.';
-          STATE.syncModal = false;
-          render();
-          setTimeout(()=>{ STATE.toast=null; render(); }, 2600);
-          cloudPush();
-          break;
-        }
-        case 'cloudPullNow': {
-          const input = document.getElementById('syncNickname');
-          if(input) setNickname(input.value.trim());
-          const r = await cloudPull();
-          STATE.toast = r.ok ? (r.found ? '클라우드에서 불러왔습니다.' : '클라우드에 저장된 기록이 없습니다.') : '불러오기에 실패했습니다 (네트워크/설정을 확인해주세요).';
-          STATE.syncModal = false;
-          render();
-          setTimeout(()=>{ STATE.toast=null; render(); }, 2600);
-          break;
-        }
         case 'openUpload': openUpload(); break;
+        case 'openSync': openSync(); break;
         case 'closeUpload': STATE.uploadModal=false; STATE.uploadState=null; render(); break;
         case 'overlayClose': if(e.target === el) { STATE.uploadModal=false; STATE.uploadState=null; render(); } break;
         case 'confirmUpload': confirmUpload(); break;
+        case 'uploadTab': STATE.uploadTab = el.getAttribute('data-t'); render(); break;
+        case 'ghList': await ghListFiles(); break;
+        case 'ghPick': await ghLoadFile(el.getAttribute('data-name'), el.getAttribute('data-url')); break;
         case 'openMode': STATE._pendingSetId = el.getAttribute('data-id'); STATE.view='mode'; render(); break;
         case 'deleteSet': deleteSet(el.getAttribute('data-id')); break;
         case 'startMode': {
@@ -1193,6 +1249,7 @@ function bindEvents(){
         case 'jumpQ': gotoIdx(Number(el.getAttribute('data-i'))); break;
         case 'selectOpt': selectOption(Number(el.getAttribute('data-n'))); break;
         case 'checkAnswer': checkAnswer(); break;
+        case 'togglePreviewExplain': { const q = currentQ(); q.previewExplain = !q.previewExplain; render(); break; }
         case 'nextQ': nextQ(); break;
         case 'prevQ': prevQ(); break;
         case 'submitExam': submitExam(); break;
@@ -1214,7 +1271,6 @@ function bindEvents(){
           const notes = STATE._notesCache;
           notes[id].bookmarked = !notes[id].bookmarked;
           await sSet('notes', notes);
-  cloudPush();
           renderWrongNoteBody();
           break;
         }
