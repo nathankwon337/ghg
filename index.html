@@ -216,6 +216,8 @@
 
   .q-text{font-size:16px; line-height:1.65; font-weight:600; margin-bottom:14px; white-space:pre-wrap;}
   .q-image-note{border:1px dashed var(--line); background:var(--surface-2); color:var(--ink-soft); font-size:12px; padding:10px 14px; border-radius:8px; margin-bottom:16px;}
+  .q-image-wrap{margin-bottom:16px;}
+  .q-image{max-width:100%; height:auto; border:1px solid var(--line); border-radius:8px; display:block;}
 
   .options{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
   .opt{
@@ -413,6 +415,12 @@ async function sSet(key, value){
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function qid(setId, subject, qnum){ return setId + '::' + subject + '::' + qnum; }
+// "2025년 제2회 기출문제" -> "2025년 2회" 처럼, 세트 이름에서 연도/회차만 뽑아 문제 화면에 짧게 표시한다.
+function formatSetRound(setName){
+  if(!setName) return '';
+  const m = setName.match(/(\d{4})\s*년.*?(\d+)\s*회/);
+  return m ? `${m[1]}년 ${m[2]}회` : setName;
+}
 
 /* ---------------------- 오답노트 클라우드 동기화 (선택) ----------------------
    오답노트(전체 오답 / 빈번오답 / 마킹) 데이터는 기본적으로 이 브라우저의 localStorage에만
@@ -967,10 +975,15 @@ function render(){
     ${STATE.navModal && STATE.session ? navModalHTML() : ''}
     ${STATE.calcModal ? calcModalHTML() : ''}
     ${STATE.topicModal ? topicModalHTML() : ''}
-    <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저 계정에만 저장됩니다</footer>
+    <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저 계정에만 저장됩니다 · build ${APP_VERSION}</footer>
   `;
   bindEvents();
 }
+
+/* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
+   브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
+   또는 재배포를 확인해보세요. */
+const APP_VERSION = '2026-07-18-4';
 
 function topbar(){
   return `
@@ -1151,7 +1164,7 @@ function uploadModalHTML(){
       포함한 100행 데이터를 업로드하면 자동으로 검증 후 등록됩니다.<br><br>
       <b>주제별 모아풀기(선택)</b>: <span class="mono">topic_tag</span> 컬럼을 추가해 문제별 주제(예: "GWP", "Scope1 배출", "할당대상업체 지정")를 적어두면, 세트를 넘나들며 같은 주제의 문제만 모아서 반복 학습할 수 있는 "🏷 주제별로 모아 풀기" 기능이 자동으로 활성화됩니다. 여러 세트에서 같은 표현(예: "GWP")을 그대로 재사용해야 서로 묶입니다. 없어도 업로드·학습에는 지장이 없습니다.<br><br>
       <b>여러 회차를 한 파일로 관리하고 싶다면</b> 엑셀 파일 안에 회차별로 Sheet를 나눠(예: "2025_2회" 시트, "2025_3회" 시트) 각 시트에 규격대로 100행씩 넣어도 됩니다 — 시트마다 자동으로 별도 세트로 인식되어 한 번에 등록됩니다.<br><br>
-      <b>도식(그림) 문제 이미지 파일명 규칙</b>: 회차 간 혼선을 막기 위해 image_url에는 <span class="mono">{연도뒤2자리}_{회차}_q{문제번호}.png</span> 형식을 권장합니다. 예) 2025년 2회 49번 도식 문제 → <span class="mono">25_2_q49.png</span>
+      <b>도식(그림) 문제 이미지</b>: image_url에 적은 파일명 그대로 <span class="mono">images/</span> 폴더(이 index.html과 같은 저장소에, 바로 옆 폴더)에 이미지를 올려두면 문제 화면에 실제로 표시됩니다. 회차 간 혼선을 막기 위해 <span class="mono">{연도뒤2자리}_{회차}_q{문제번호}.png</span> 형식을 권장합니다. 예) 2025년 2회 49번 도식 문제 → image_url에 <span class="mono">25_2_q49.png</span> 기입 + <span class="mono">images/25_2_q49.png</span>에 파일 업로드. 파일명이 정확히 일치하지 않으면 이미지 대신 경로 안내 문구가 표시됩니다.
     </div>
   `;
 
@@ -1298,7 +1311,7 @@ function renderQuiz(){
 
     <div class="card quiz-main">
       <div class="q-top">
-        <div class="q-index">${subjectLabel} &nbsp;·&nbsp; 원문제 ${q.qnum}번</div>
+        <div class="q-index">${formatSetRound(setNameLabel)} &nbsp;·&nbsp; ${subjectLabel} &nbsp;·&nbsp; 원문제 ${q.qnum}번</div>
         <div class="q-badges">
           ${q.topic ? `<span class="badge badge-topic" data-act="startTopicFromBadge" data-topic="${escapeHtml(q.topic)}">🏷 ${escapeHtml(q.topic)}</span>` : ''}
           ${wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${wrongCount}회</span>` : ''}
@@ -1308,7 +1321,16 @@ function renderQuiz(){
       </div>
 
       <div class="q-text">${escapeHtml(q.question_text)}</div>
-      ${q.image_url ? `<div class="q-image-note">🖼 도식 이미지: <b>${escapeHtml(q.image_url)}</b> (정적 리소스 경로에 배치된 이미지가 여기에 표시됩니다)</div>` : ''}
+      ${q.image_url ? `
+        <div class="q-image-wrap">
+          <img src="images/${escapeHtml(q.image_url)}" alt="도식 이미지: ${escapeHtml(q.image_url)}" class="q-image"
+               onerror="this.style.display='none'; var f=document.getElementById('imgfallback-${idx}'); if(f) f.style.display='block';">
+          <div id="imgfallback-${idx}" class="q-image-note" style="display:none;">
+            🖼 도식 이미지를 <span class="mono">images/${escapeHtml(q.image_url)}</span> 경로에서 찾지 못했습니다.
+            저장소의 <span class="mono">images</span> 폴더에 정확히 이 파일명으로 이미지를 올렸는지 확인해주세요.
+          </div>
+        </div>
+      ` : ''}
 
       <div class="options">${options}</div>
 
