@@ -273,7 +273,7 @@
 <script>
 /* =========================================================================
    온실가스 관리기사 학습 플랫폼 — single-file app
-   Storage schema (window.storage, all personal / shared:false):
+   Storage schema (localStorage, JSON-stringified):
      - "qsets_index"  -> [{id,name,uploadedAt,total,calcCount}]
      - "qset_<id>"    -> {id,name,uploadedAt,questions:[...]}
      - "notes"        -> { [qid]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot} }
@@ -307,13 +307,16 @@ let STATE = {
   toast: null
 };
 
-/* ---------------------- storage helpers ---------------------- */
+/* ---------------------- storage helpers ----------------------
+   실제 배포(GitHub Pages 등)에서도 동작해야 하므로, 다른 게임 앱들과 동일하게
+   브라우저 localStorage를 사용한다 (window.storage는 Claude 미리보기 전용 API라
+   외부 사이트에서는 존재하지 않아 세트 데이터를 불러오지 못하는 원인이 되었음). */
 async function sGet(key){
-  try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; }
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
   catch(e){ return null; }
 }
 async function sSet(key, value){
-  try{ await window.storage.set(key, JSON.stringify(value)); return true; }
+  try{ localStorage.setItem(key, JSON.stringify(value)); return true; }
   catch(e){ console.error('storage set failed', key, e); return false; }
 }
 
@@ -476,7 +479,7 @@ async function deleteSet(id){
   if(!confirm('이 문제 세트를 삭제하시겠습니까? 저장된 문제 데이터가 삭제됩니다 (오답노트 기록은 유지됩니다).')) return;
   STATE.sets = STATE.sets.filter(s => s.id !== id);
   await sSet('qsets_index', STATE.sets);
-  try{ await window.storage.delete('qset_' + id); }catch(e){}
+  try{ localStorage.removeItem('qset_' + id); }catch(e){}
   render();
 }
 
