@@ -196,6 +196,7 @@
   .q-badges{display:flex; gap:6px;}
   .badge{font-size:11px; padding:3px 8px; border-radius:999px; font-weight:700;}
   .badge-calc{background:var(--slate-soft); color:var(--slate);}
+  .badge-topic{background:var(--pine-soft); color:var(--pine-dark); cursor:pointer;}
   .badge-mark{background:#FBEBD0; color:var(--amber); cursor:pointer; border:1px solid transparent;}
   .badge-mark.active{background:var(--amber); color:#fff;}
   .badge-freq{background:var(--danger-soft); color:var(--danger);}
@@ -279,6 +280,8 @@
     main{padding:16px 12px 48px;}
     .page-title{font-size:19px;}
     .page-sub{font-size:12.5px; margin-bottom:16px;}
+    .section-row{flex-wrap:wrap; gap:8px; align-items:flex-start;}
+    .section-row > div{flex-wrap:wrap;}
 
     /* 상단바: 타이틀은 한 줄로 압축하고, 자막은 숨겨 두 줄로 넘치지 않게 한다 */
     .topbar{padding:10px 12px;}
@@ -376,6 +379,8 @@ let STATE = {
   syncing: false,
   noteSyncModal: false,     // 오답노트 클라우드 동기화 설정 모달
   noteSyncStatus: null,     // {state:'idle'|'syncing'|'ok'|'error', message, at}
+  topicModal: false,        // 주제별로 모아 풀기 피커
+  topicData: null,          // null | {loading:true} | {topics:[{name,count,subjectSet}], total}
   toast: null
 };
 
@@ -531,6 +536,7 @@ function parseSheetRows(dataSheet){
     const isCalcRaw = get('is_calculation');
     const isCalc = isCalcRaw === true || (''+isCalcRaw).trim().toUpperCase() === 'TRUE';
     const stepRaw = get('step_explanation');
+    const topicRaw = get('topic_tag');
     rows.push({
       set_name: get('set_name'),
       subject_num: Number(get('subject_num')),
@@ -541,7 +547,8 @@ function parseSheetRows(dataSheet){
       answer: Number(get('answer')),
       general_explanation: (get('general_explanation')||'').toString(),
       is_calculation: isCalc,
-      steps: (isCalc && stepRaw) ? (''+stepRaw).split('||').map(s=>s.trim()).filter(Boolean) : []
+      steps: (isCalc && stepRaw) ? (''+stepRaw).split('||').map(s=>s.trim()).filter(Boolean) : [],
+      topic: topicRaw ? (''+topicRaw).trim() : ''
     });
   }
   return rows;
@@ -630,7 +637,8 @@ async function confirmUpload(){
     const questions = p.rows.map(r => ({
       qnum: r.question_num, subject: r.subject_num, question_text: r.question_text,
       image_url: r.image_url, options: r.options, answer: r.answer,
-      general_explanation: r.general_explanation, is_calculation: r.is_calculation, steps: r.steps
+      general_explanation: r.general_explanation, is_calculation: r.is_calculation, steps: r.steps,
+      topic: r.topic || ''
     })).sort((a,b) => a.qnum - b.qnum);
     const calcCount = questions.filter(q=>q.is_calculation).length;
     const setObj = {id, name: p.setName || ('세트 ' + (STATE.sets.length+1)), uploadedAt: Date.now(), questions};
@@ -665,7 +673,7 @@ async function recordAnswer(setId, setName, q, isCorrect){
   const snapshot = {
     setId, setName, subject:q.subject, qnum:q.qnum, question_text:q.question_text,
     options:q.options, answer:q.answer, general_explanation:q.general_explanation,
-    is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url
+    is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url, topic:q.topic || ''
   };
   const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
   cur.snapshot = snapshot;
@@ -687,7 +695,8 @@ async function toggleBookmark(setId, q){
   const snapshot = {
     setId, setName:(STATE.activeSet? STATE.activeSet.name : (q.setName||'')), subject:q.subject, qnum:q.qnum,
     question_text:q.question_text, options:q.options, answer:q.answer,
-    general_explanation:q.general_explanation, is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url
+    general_explanation:q.general_explanation, is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url,
+    topic:q.topic || ''
   };
   const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
   cur.bookmarked = !cur.bookmarked;
@@ -727,6 +736,7 @@ async function startWrongOnly(filterList){
     qnum:n.snapshot.qnum, subject:n.snapshot.subject, question_text:n.snapshot.question_text,
     options:n.snapshot.options, answer:n.snapshot.answer, general_explanation:n.snapshot.general_explanation,
     is_calculation:n.snapshot.is_calculation, steps:n.snapshot.steps, image_url:n.snapshot.image_url,
+    topic:n.snapshot.topic || '',
     _setId:n.snapshot.setId, _setName:n.snapshot.setName,
     userAnswer:null, checked:false, correct:null
   }));
@@ -734,6 +744,97 @@ async function startWrongOnly(filterList){
   STATE.session = { mode:'practice', sourceType:'wrongOnly', setId:null, setName:'오답 다시 풀기', list, idx:0 };
   STATE.view = 'quiz';
   render();
+}
+
+/* ---------------------- 주제별로 모아 풀기 (여러 세트 통합 학습) ----------------------
+   등록된 모든 세트를 불러와 question.topic(엑셀의 topic_tag 컬럼) 기준으로 모아,
+   같은 주제의 문제를 세트 구분 없이 이어서 풀 수 있게 한다. 세트 수가 늘어날수록
+   (예: 10개 세트 = 1000문항) 취약한 주제만 집중적으로 반복할 때 유용하다. */
+async function loadAllSetsFull(){
+  const all = [];
+  for(const s of STATE.sets){
+    const full = await sGet('qset_' + s.id);
+    if(full) all.push(full);
+  }
+  return all;
+}
+
+async function openTopicPicker(){
+  STATE.topicModal = true;
+  STATE.topicData = {loading:true};
+  render();
+  const allSets = await loadAllSetsFull();
+  const map = {}; // topic -> {count, sets:Set}
+  let totalTagged = 0, totalQ = 0;
+  allSets.forEach(full => {
+    full.questions.forEach(q => {
+      totalQ++;
+      if(!q.topic) return;
+      totalTagged++;
+      if(!map[q.topic]) map[q.topic] = {count:0, sets:new Set()};
+      map[q.topic].count++;
+      map[q.topic].sets.add(full.name);
+    });
+  });
+  const topics = Object.keys(map).sort((a,b)=>map[b].count-map[a].count || a.localeCompare(b))
+    .map(name => ({name, count:map[name].count, setCount:map[name].sets.size}));
+  STATE.topicData = {loading:false, topics, totalTagged, totalQ};
+  render();
+}
+function closeTopicPicker(){ STATE.topicModal = false; render(); }
+
+async function startTopicSession(topic){
+  STATE.topicModal = false;
+  const allSets = await loadAllSetsFull();
+  const list = [];
+  allSets.forEach(full => {
+    full.questions.forEach(q => {
+      if(q.topic === topic){
+        list.push({
+          ...q, _setId: full.id, _setName: full.name,
+          userAnswer:null, checked:false, correct:null
+        });
+      }
+    });
+  });
+  if(!list.length){ alert('해당 주제의 문제를 찾을 수 없습니다.'); render(); return; }
+  STATE.activeSet = null;
+  STATE.session = { mode:'practice', sourceType:'topic', setId:null, setName:'🏷 주제: ' + topic, list, idx:0 };
+  STATE.view = 'quiz';
+  render();
+}
+
+function topicModalHTML(){
+  const td = STATE.topicData;
+  return `
+  <div class="overlay" data-act="overlayCloseTopic">
+    <div class="modal" data-stop="1" style="max-width:560px;">
+      <div class="modal-head">
+        <h3>🏷 주제별로 모아 풀기</h3>
+        <button class="icon-x" data-act="closeTopicPicker">✕</button>
+      </div>
+      <div class="modal-body">
+        ${!td || td.loading ? `<div class="ok-box">등록된 세트를 모두 불러와 주제를 모으는 중입니다…</div>` : (
+          td.topics.length ? `
+            <div class="ok-box" style="margin-bottom:12px;">
+              전체 ${td.totalQ}문항 중 ${td.totalTagged}문항에 주제 태그가 있습니다. 원하는 주제를 선택하면, 등록된 모든 세트에서 그 주제의 문제만 모아 연습 모드로 풀 수 있습니다.
+            </div>
+            <div class="set-pick-list" style="max-height:360px;">
+              ${td.topics.map(t => `
+                <div class="gh-file-row" data-act="pickTopic" data-topic="${escapeHtml(t.name)}">
+                  <span>${escapeHtml(t.name)} <span class="mono" style="color:var(--ink-soft); font-size:11.5px;">(${t.setCount}개 세트)</span></span>
+                  <span class="pick">${t.count}문항 →</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : `<div class="empty">등록된 세트에 주제 태그(topic_tag)가 있는 문제가 없습니다. 엑셀에 topic_tag 컬럼을 추가해 업로드하면 여기에 나타납니다.</div>`
+        )}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-act="closeTopicPicker">닫기</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function currentQ(){ return STATE.session.list[STATE.session.idx]; }
@@ -838,6 +939,7 @@ function render(){
     ${STATE.uploadModal ? uploadModalHTML() : ''}
     ${STATE.navModal && STATE.session ? navModalHTML() : ''}
     ${STATE.calcModal ? calcModalHTML() : ''}
+    ${STATE.topicModal ? topicModalHTML() : ''}
     <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저 계정에만 저장됩니다</footer>
   `;
   bindEvents();
@@ -890,7 +992,13 @@ function renderHome(){
     <div class="page-title">학습할 기출문제 세트를 선택하세요</div>
     <div class="page-sub">세트당 100문항(5과목 × 20문항) · 실전 모드와 연습 모드를 지원합니다</div>
 
-    <div class="section-row"><h2>내 문제 세트</h2><span class="count">${STATE.sets.length}개 세트</span></div>
+    <div class="section-row">
+      <h2>내 문제 세트</h2>
+      <div style="display:flex; align-items:center; gap:10px;">
+        ${STATE.sets.length ? `<button class="btn btn-sm" data-act="openTopicPicker">🏷 주제별로 모아 풀기</button>` : ''}
+        <span class="count">${STATE.sets.length}개 세트</span>
+      </div>
+    </div>
     ${STATE.sets.length ? `<div class="grid-cards">${cards}
       <div class="upload-card" data-act="openUpload">
         <b>+ 새 문제 세트 업로드</b>
@@ -1014,6 +1122,7 @@ function uploadModalHTML(){
       규격: set_name, subject_num(1~5), question_num(1~100), question_text, image_url,
       option_1~4, answer(1~4), general_explanation, is_calculation(TRUE/FALSE), step_explanation( '||' 구분자 ) 컬럼을
       포함한 100행 데이터를 업로드하면 자동으로 검증 후 등록됩니다.<br><br>
+      <b>주제별 모아풀기(선택)</b>: <span class="mono">topic_tag</span> 컬럼을 추가해 문제별 주제(예: "GWP", "Scope1 배출", "할당대상업체 지정")를 적어두면, 세트를 넘나들며 같은 주제의 문제만 모아서 반복 학습할 수 있는 "🏷 주제별로 모아 풀기" 기능이 자동으로 활성화됩니다. 여러 세트에서 같은 표현(예: "GWP")을 그대로 재사용해야 서로 묶입니다. 없어도 업로드·학습에는 지장이 없습니다.<br><br>
       <b>여러 회차를 한 파일로 관리하고 싶다면</b> 엑셀 파일 안에 회차별로 Sheet를 나눠(예: "2025_2회" 시트, "2025_3회" 시트) 각 시트에 규격대로 100행씩 넣어도 됩니다 — 시트마다 자동으로 별도 세트로 인식되어 한 번에 등록됩니다.<br><br>
       <b>도식(그림) 문제 이미지 파일명 규칙</b>: 회차 간 혼선을 막기 위해 image_url에는 <span class="mono">{연도뒤2자리}_{회차}_q{문제번호}.png</span> 형식을 권장합니다. 예) 2025년 2회 49번 도식 문제 → <span class="mono">25_2_q49.png</span>
     </div>
@@ -1163,6 +1272,7 @@ function renderQuiz(){
       <div class="q-top">
         <div class="q-index">${subjectLabel} &nbsp;·&nbsp; 원문제 ${q.qnum}번</div>
         <div class="q-badges">
+          ${q.topic ? `<span class="badge badge-topic" data-act="startTopicFromBadge" data-topic="${escapeHtml(q.topic)}">🏷 ${escapeHtml(q.topic)}</span>` : ''}
           ${wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${wrongCount}회</span>` : ''}
           ${q.is_calculation ? `<span class="badge badge-calc">계산문제</span>` : ''}
           <span class="badge badge-mark ${bookmarked?'active':''}" data-act="toggleMark">${bookmarked?'★ 마킹됨':'☆ 마킹'}</span>
@@ -1513,6 +1623,11 @@ function bindEvents(){
         case 'home': goHome(); break;
         case 'wrongnote': goWrongNote(); break;
         case 'openUpload': openUpload(); break;
+        case 'openTopicPicker': await openTopicPicker(); break;
+        case 'closeTopicPicker': closeTopicPicker(); break;
+        case 'overlayCloseTopic': if(e.target === el) closeTopicPicker(); break;
+        case 'pickTopic': await startTopicSession(el.getAttribute('data-topic')); break;
+        case 'startTopicFromBadge': await startTopicSession(el.getAttribute('data-topic')); break;
         case 'openSync': openSync(); break;
         case 'closeUpload': STATE.uploadModal=false; STATE.uploadState=null; render(); break;
         case 'overlayClose': if(e.target === el) { STATE.uploadModal=false; STATE.uploadState=null; render(); } break;
