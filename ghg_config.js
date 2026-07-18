@@ -17,4 +17,4 @@
  * 참고: 문제 세트(엑셀로 업로드한 100문항 데이터) 자체는 동기화 대상이
  * 아닙니다. 각 기기에서 엑셀 파일을 한 번씩 업로드해주면 됩니다.
  */
-window.GHG_CLOUD_ENDPOINT = '';
+window.GHG_CLOUD_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzdD2odP3YSXtkehAEPC6R3pvaXVg_8uupBBlkBOGMumEWRzeMzly1iJuTYyyAYbQzK/exec';
