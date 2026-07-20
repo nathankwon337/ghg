@@ -877,6 +877,35 @@ function returnToPreviousSession(){
   render();
 }
 
+/* ---------------------- 계산문제만 모아 풀기 (여러 세트 통합 학습) ----------------------
+   주제별로 모아 풀기와 동일한 방식으로, 등록된 모든 세트를 불러와 is_calculation=TRUE인
+   문제만 세트 구분 없이 모아서 이어 풀 수 있게 한다. 주제(topic_tag)와 달리 고를 항목이
+   하나뿐이므로(계산문제 여부는 켜짐/꺼짐 둘 중 하나) 별도의 선택 팝업 없이 버튼 한 번으로
+   바로 시작한다. */
+async function startCalcSession(){
+  const allSets = await loadAllSetsFull();
+  const list = [];
+  allSets.forEach(full => {
+    full.questions.forEach(q => {
+      if(q.is_calculation){
+        list.push({
+          ...q, _setId: full.id, _setName: full.name,
+          userAnswer:null, checked:false, correct:null
+        });
+      }
+    });
+  });
+  if(!list.length){ alert('등록된 세트에 계산 문제(is_calculation=TRUE)가 없습니다.'); return; }
+  // 지금 풀고 있던 세션이 있다면(그리고 아직 되돌아갈 세션을 저장해두지 않았다면) 그대로 보존해둔다.
+  if(STATE.view === 'quiz' && STATE.session && !STATE.returnSession){
+    STATE.returnSession = { session: STATE.session, activeSet: STATE.activeSet };
+  }
+  STATE.activeSet = null;
+  STATE.session = { mode:'practice', sourceType:'calc', setId:null, setName:'📐 계산문제 모아 풀기', list, idx:0 };
+  STATE.view = 'quiz';
+  render();
+}
+
 function topicModalHTML(){
   const td = STATE.topicData;
   return `
@@ -1021,7 +1050,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-18-4';
+const APP_VERSION = '2026-07-20-1';
 
 function topbar(){
   return `
@@ -1072,8 +1101,9 @@ function renderHome(){
 
     <div class="section-row">
       <h2>내 문제 세트</h2>
-      <div style="display:flex; align-items:center; gap:10px;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
         ${STATE.sets.length ? `<button class="btn btn-sm" data-act="openTopicPicker">🏷 주제별로 모아 풀기</button>` : ''}
+        ${STATE.sets.length ? `<button class="btn btn-sm" data-act="startCalcSession">📐 계산문제만 모아 풀기</button>` : ''}
         <span class="count">${STATE.sets.length}개 세트</span>
       </div>
     </div>
@@ -1201,6 +1231,7 @@ function uploadModalHTML(){
       option_1~4, answer(1~4), general_explanation, is_calculation(TRUE/FALSE), step_explanation( '||' 구분자 ) 컬럼을
       포함한 100행 데이터를 업로드하면 자동으로 검증 후 등록됩니다.<br><br>
       <b>주제별 모아풀기(선택)</b>: <span class="mono">topic_tag</span> 컬럼을 추가해 문제별 주제(예: "GWP", "Scope1 배출", "할당대상업체 지정")를 적어두면, 세트를 넘나들며 같은 주제의 문제만 모아서 반복 학습할 수 있는 "🏷 주제별로 모아 풀기" 기능이 자동으로 활성화됩니다. 여러 세트에서 같은 표현(예: "GWP")을 그대로 재사용해야 서로 묶입니다. 없어도 업로드·학습에는 지장이 없습니다.<br><br>
+      <b>계산문제만 모아풀기</b>: <span class="mono">is_calculation</span>이 TRUE인 문제는 별도 설정 없이도 세트 목록 화면의 "📐 계산문제만 모아 풀기" 버튼과 문제 풀이 화면의 "📐 계산문제" 배지를 통해, 등록된 모든 세트를 통틀어 계산 문제만 모아 바로 풀어볼 수 있습니다.<br><br>
       <b>여러 회차를 한 파일로 관리하고 싶다면</b> 엑셀 파일 안에 회차별로 Sheet를 나눠(예: "2025_2회" 시트, "2025_3회" 시트) 각 시트에 규격대로 100행씩 넣어도 됩니다 — 시트마다 자동으로 별도 세트로 인식되어 한 번에 등록됩니다.<br><br>
       <b>도식(그림) 문제 이미지</b>: image_url에 적은 파일명 그대로 <span class="mono">images/</span> 폴더(이 index.html과 같은 저장소에, 바로 옆 폴더)에 이미지를 올려두면 문제 화면에 실제로 표시됩니다. 회차 간 혼선을 막기 위해 <span class="mono">{연도뒤2자리}_{회차}_q{문제번호}.png</span> 형식을 권장합니다. 예) 2025년 2회 49번 도식 문제 → image_url에 <span class="mono">25_2_q49.png</span> 기입 + <span class="mono">images/25_2_q49.png</span>에 파일 업로드. 파일명이 정확히 일치하지 않으면 이미지 대신 경로 안내 문구가 표시됩니다.
     </div>
@@ -1353,7 +1384,7 @@ function renderQuiz(){
         <div class="q-badges">
           ${q.topic ? `<span class="badge badge-topic" data-act="startTopicFromBadge" data-topic="${escapeHtml(q.topic)}">🏷 ${escapeHtml(q.topic)}</span>` : ''}
           ${wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${wrongCount}회</span>` : ''}
-          ${q.is_calculation ? `<span class="badge badge-calc">계산문제</span>` : ''}
+          ${q.is_calculation ? `<span class="badge badge-calc" style="cursor:pointer;" data-act="startCalcSession" title="모든 세트의 계산 문제만 모아 풀기">📐 계산문제</span>` : ''}
           <span class="badge badge-mark ${bookmarked?'active':''}" data-act="toggleMark">${bookmarked?'★ 마킹됨':'☆ 마킹'}</span>
         </div>
       </div>
@@ -1686,6 +1717,7 @@ function renderWrongNoteBody(){
             <span>제${s.subject}과목</span>
             <span>#${s.qnum}</span>
             ${n.wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${n.wrongCount}회</span>` : (n.wrongCount>0?`<span class="badge badge-calc">오답 ${n.wrongCount}회</span>`:'')}
+            ${s.is_calculation ? `<span class="badge badge-calc" style="cursor:pointer;" data-act="startCalcSession" title="모든 세트의 계산 문제만 모아 풀기">📐 계산문제</span>` : ''}
             ${s.topic ? `<span class="badge badge-topic" data-act="startTopicFromBadge" data-topic="${escapeHtml(s.topic)}">🏷 ${escapeHtml(s.topic)}</span>` : ''}
           </div>
           <div class="wrong-item-q">${escapeHtml(s.question_text)}</div>
@@ -1754,6 +1786,7 @@ function bindEvents(){
         case 'overlayCloseTopic': if(e.target === el) closeTopicPicker(); break;
         case 'pickTopic': await startTopicSession(el.getAttribute('data-topic')); break;
         case 'startTopicFromBadge': await startTopicSession(el.getAttribute('data-topic')); break;
+        case 'startCalcSession': await startCalcSession(); break;
         case 'returnToPreviousSession': returnToPreviousSession(); break;
         case 'openSync': openSync(); break;
         case 'closeUpload': STATE.uploadModal=false; STATE.uploadState=null; render(); break;
