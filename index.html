@@ -43,18 +43,51 @@
 
   /* ---------- top bar ---------- */
   .topbar{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:14px 24px; background:var(--pine-dark); color:#fff;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;
+    padding:12px 16px; background:var(--pine-dark); color:#fff; gap:8px 10px;
     position:sticky; top:0; z-index:40;
   }
-  .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px;}
-  .brand .dot{width:10px;height:10px;border-radius:50%;background:#7FD9A8; box-shadow:0 0 0 3px rgba(127,217,168,.25);}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px; min-width:0;}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:#7FD9A8; box-shadow:0 0 0 3px rgba(127,217,168,.25); flex-shrink:0;}
   .brand small{display:block; font-weight:400; font-size:11.5px; color:#B9D6C4; letter-spacing:.3px;}
-  .topbar-actions{display:flex; gap:8px; align-items:center;}
+  .topbar-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
   .pill{
     font-size:12px; padding:5px 10px; border-radius:999px; background:rgba(255,255,255,.1);
     color:#DDEEE4; font-family:'IBM Plex Mono',monospace;
   }
+  /* prominent topbar nav buttons: 세트목록 / 오답노트 / 동기화 */
+  .btn-top{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:9px 15px; border-radius:9px; font-size:13.5px; font-weight:800;
+    border:1.5px solid rgba(255,255,255,.35); background:rgba(255,255,255,.08); color:#fff;
+    cursor:pointer; font-family:inherit; transition:all .12s ease;
+  }
+  .btn-top:hover{background:rgba(255,255,255,.2); border-color:#fff;}
+  .btn-top .ic{font-size:15px; line-height:1;}
+  .btn-top.accent{background:#7FD9A8; border-color:#7FD9A8; color:var(--pine-dark);}
+  .btn-top.accent:hover{background:#69cf98;}
+  .btn-top.syncing{opacity:.7; pointer-events:none;}
+  .btn-top .ic.spin{display:inline-block; animation:spin 1s linear infinite;}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+
+  /* upload modal tabs (local / github) */
+  .upload-tabs{display:flex; gap:6px; margin-bottom:16px; border-bottom:1px solid var(--line);}
+  .upload-tab{padding:9px 4px; margin-right:14px; border:none; background:none; cursor:pointer; font-family:inherit;
+    font-size:13.5px; font-weight:700; color:var(--ink-soft); border-bottom:2px solid transparent; margin-bottom:-1px;}
+  .upload-tab.active{color:var(--pine-dark); border-bottom-color:var(--pine);}
+  .gh-field{margin-bottom:10px;}
+  .gh-field label{display:block; font-size:12px; font-weight:700; color:var(--ink-soft); margin-bottom:4px;}
+  .gh-field input{width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:7px; font-size:13.5px; font-family:inherit; background:var(--surface);}
+  .gh-file-list{margin-top:12px; border:1px solid var(--line); border-radius:8px; overflow:hidden;}
+  .gh-file-row{display:flex; justify-content:space-between; align-items:center; padding:10px 12px; font-size:13px; border-bottom:1px solid var(--line); cursor:pointer;}
+  .gh-file-row:last-child{border-bottom:none;}
+  .gh-file-row:hover{background:var(--pine-soft);}
+  .gh-file-row .pick{color:var(--pine); font-weight:700; font-size:12px; flex-shrink:0; margin-left:10px;}
+  .gh-file-note{padding:12px; font-size:12.5px; color:var(--ink-soft);}
+  .set-pick-list{display:flex; flex-direction:column; gap:6px; margin-top:10px; max-height:220px; overflow:auto;}
+  .set-pick-row{display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:7px; font-size:13px;}
+  .set-pick-row.err{border-color:#E2B4AC; background:var(--danger-soft);}
+  .set-pick-row.warn{border-color:#E9CE9C; background:#FBF3E4;}
 
   main{flex:1; padding:28px 24px 60px; max-width:1180px; margin:0 auto; width:100%;}
 
@@ -134,12 +167,21 @@
   .quiz-progressbar{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
     margin-bottom:12px; padding:10px 14px; background:var(--surface); border:1px solid var(--line);
-    border-radius:9px; position:sticky; top:66px; z-index:10;
+    border-radius:9px; position:sticky; top:60px; z-index:10;
   }
   .progress-track{flex:1; height:6px; background:var(--surface-2); border-radius:99px; overflow:hidden; margin:0 12px;}
   .progress-fill{height:100%; background:var(--pine); border-radius:99px;}
   .progress-text{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); white-space:nowrap;}
   .navopen-btn{font-family:'IBM Plex Mono',monospace; font-size:12px; white-space:nowrap;}
+  .return-session-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    padding:10px 14px; margin-bottom:12px; background:var(--pine-soft); border:1px solid var(--pine);
+    border-radius:9px; font-size:12.5px; color:var(--pine-dark);
+  }
+  .jump-select{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; padding:6px 8px; border-radius:7px;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink); max-width:110px; flex-shrink:0;
+  }
 
   .qnav-grid{display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-top:6px;}
   @media (max-width:420px){.qnav-grid{grid-template-columns:repeat(5,1fr);}}
@@ -153,6 +195,10 @@
   .qnav-btn.correct{background:var(--ok-soft); color:var(--ok); border-color:var(--ok);}
   .qnav-btn.incorrect{background:var(--danger-soft); color:var(--danger); border-color:var(--danger);}
   .qnav-legend{font-size:11.5px; color:var(--ink-soft); margin-top:16px; display:flex; flex-direction:column; gap:6px;}
+  .subj-progress-list{display:flex; flex-direction:column; gap:8px; margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid var(--line);}
+  .subj-progress-row{display:flex; align-items:center;}
+  .subj-progress-label{font-size:12px; font-weight:700; color:var(--ink-soft); width:44px; flex-shrink:0;}
+  .subj-progress-row .progress-track{flex:1; margin:0 10px !important;}
   .qnav-legend span{display:flex; align-items:center; gap:6px;}
   .swatch{width:10px; height:10px; border-radius:3px; display:inline-block; flex-shrink:0;}
 
@@ -163,12 +209,15 @@
   .q-badges{display:flex; gap:6px;}
   .badge{font-size:11px; padding:3px 8px; border-radius:999px; font-weight:700;}
   .badge-calc{background:var(--slate-soft); color:var(--slate);}
+  .badge-topic{background:var(--pine-soft); color:var(--pine-dark); cursor:pointer;}
   .badge-mark{background:#FBEBD0; color:var(--amber); cursor:pointer; border:1px solid transparent;}
   .badge-mark.active{background:var(--amber); color:#fff;}
   .badge-freq{background:var(--danger-soft); color:var(--danger);}
 
   .q-text{font-size:16px; line-height:1.65; font-weight:600; margin-bottom:14px; white-space:pre-wrap;}
   .q-image-note{border:1px dashed var(--line); background:var(--surface-2); color:var(--ink-soft); font-size:12px; padding:10px 14px; border-radius:8px; margin-bottom:16px;}
+  .q-image-wrap{margin-bottom:16px;}
+  .q-image{max-width:100%; height:auto; border:1px solid var(--line); border-radius:8px; display:block;}
 
   .options{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
   .opt{
@@ -220,6 +269,13 @@
   .subj-pass{color:var(--ok); font-weight:700;}
 
   /* wrong note */
+  /* wrong note cloud sync */
+  .note-sync-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; padding:10px 14px; background:var(--surface-2); border-radius:9px;}
+  .sync-status{font-size:12.5px; font-weight:700; color:var(--pine-dark);}
+  .sync-status.off{color:var(--ink-soft); font-weight:600;}
+  .sync-status.busy{color:var(--slate);}
+  .sync-last{font-size:11.5px; color:var(--ink-soft);}
+
   .filter-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
   .filter-tab{padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:var(--surface); font-size:13px; cursor:pointer; font-weight:600; color:var(--ink-soft);}
   .filter-tab.active{background:var(--pine); border-color:var(--pine); color:#fff;}
@@ -232,15 +288,81 @@
   .star-btn.on{color:var(--amber);}
 
   footer.note{text-align:center; color:var(--ink-soft); font-size:11.5px; padding:20px; opacity:.7;}
+
+  /* =========================================================================
+     모바일 반응형 정비 (~640px 이하)
+     ========================================================================= */
+  @media (max-width:640px){
+    main{padding:16px 12px 48px;}
+    .page-title{font-size:19px;}
+    .page-sub{font-size:12.5px; margin-bottom:16px;}
+    .section-row{flex-wrap:wrap; gap:8px; align-items:flex-start;}
+    .section-row > div{flex-wrap:wrap;}
+
+    /* 상단바: 타이틀은 한 줄로 압축하고, 자막은 숨겨 두 줄로 넘치지 않게 한다 */
+    .topbar{padding:10px 12px;}
+    .brand{font-size:13.5px; gap:7px;}
+    .brand small{display:none;}
+    .topbar-actions{gap:6px; width:100%; justify-content:flex-start;}
+    .btn-top{padding:8px 11px; font-size:12.5px; gap:4px; flex:1 1 auto; justify-content:center;}
+    .btn-top .ic{font-size:14px;}
+
+    /* 문제 풀이 진행바: 상단바가 두 줄이 될 수 있어 sticky를 끄고 자연스럽게 흘러가게 한다 */
+    .quiz-progressbar{position:static;}
+
+    /* 버튼: 터치 타겟을 넉넉하게, 폭이 좁으면 자연스럽게 줄바꿈 */
+    .btn{padding:10px 14px; font-size:13.5px;}
+    .quiz-footer{flex-direction:column; align-items:stretch; gap:10px;}
+    .quiz-footer-left,.quiz-footer-right{width:100%; justify-content:stretch;}
+    .quiz-footer-left .btn,.quiz-footer-right .btn{flex:1;}
+    .q-top{flex-wrap:wrap; gap:8px;}
+    .q-badges{flex-wrap:wrap;}
+
+    /* 카드/그리드: 한 칼럼으로 */
+    .grid-cards{grid-template-columns:1fr;}
+    .set-card .actions{flex-wrap:wrap;}
+
+    /* 모달: 화면 꽉 채우듯 여백 최소화, 세로 스택 */
+    .overlay{padding:10px; align-items:flex-end;}
+    .modal{max-width:100%; max-height:92vh; border-radius:14px 14px 0 0;}
+    .modal-body{padding:16px;}
+    .modal-head{padding:14px 16px;}
+    .modal-foot{padding:12px 16px; flex-wrap:wrap;}
+    .modal-foot .btn{flex:1; justify-content:center;}
+    .gh-field input, .field-label + input{font-size:16px;} /* iOS 자동 확대 방지 */
+
+    /* 결과 화면: 게이지+텍스트 세로 배치, 과목 표는 가로 스크롤 */
+    .score-hero{flex-direction:column; align-items:flex-start; padding:20px;}
+    .subject-table{display:block; overflow-x:auto; white-space:nowrap;}
+    .bar-track{width:110px;}
+
+    /* 오답노트 */
+    .note-sync-row{flex-direction:column; align-items:flex-start; gap:8px;}
+    .wrong-item-top{flex-wrap:wrap;}
+    .filter-tabs{gap:6px;}
+    .filter-tab{padding:6px 11px; font-size:12px;}
+
+    /* 문항 이동 팝업 그리드는 더 촘촘하게 */
+    .qnav-grid{grid-template-columns:repeat(6,1fr);}
+  }
+  @media (max-width:380px){
+    .qnav-grid{grid-template-columns:repeat(5,1fr);}
+    .btn-top .lbl{display:none;} /* 아주 좁은 화면에서는 아이콘만 표시 */
+    .btn-top{padding:9px;}
+  }
 </style>
 </head>
 <body>
 <div id="app"></div>
 
+<!-- 오답노트 클라우드 동기화용 "웹앱 주소" 기본값 (선택 사항).
+     ghg_config.js 파일이 없어도 앱은 정상 동작하며, 그 경우 사용자가
+     동기화 설정 화면에서 직접 웹앱 주소를 입력할 수 있다. -->
+<script src="ghg_config.js"></script>
 <script>
 /* =========================================================================
    온실가스 관리기사 학습 플랫폼 — single-file app
-   Storage schema (window.storage, all personal / shared:false):
+   Storage schema (localStorage, JSON-stringified):
      - "qsets_index"  -> [{id,name,uploadedAt,total,calcCount}]
      - "qset_<id>"    -> {id,name,uploadedAt,questions:[...]}
      - "notes"        -> { [qid]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot} }
@@ -258,54 +380,198 @@ const PASS_TOTAL = 60;
 const SUBJECT_PASS_MIN = 8; // 과목별 20문항 중 8문제(40%) 미만 = 과락 -> 8개 이상 정답해야 통과
 
 let STATE = {
-  view: 'home',            // home | mode | quiz | result | wrongnote | calccollect
+  view: 'home',            // home | mode | quiz | result | wrongnote
   sets: [],                // index
   activeSet: null,         // full set object {id,name,questions}
   session: null,           // {mode, sourceType, list:[...], idx}
+  returnSession: null,     // {session, activeSet} — 주제별 모아풀기 등으로 잠시 벗어난 원래 세션을 복귀시키기 위한 보관소
   lastResult: null,
   wrongFilter: 'all',      // all | freq | bookmark
-  calcFilter: 'all',       // all | 1 | 2 | 3 | 4 | 5 (subject_num)
   calcModal: null,         // {steps, stepIdx}
   navModal: false,
   uploadModal: false,
-  uploadState: null,       // {status, errors, warnings, parsed}
+  uploadState: null,       // {status, errors, warnings, parsed:[{setName,rows}, ...]}
+  uploadTab: 'local',      // local | github
+  gh: {owner:'', repo:'', path:'', branch:'', files:null, listing:false, loadingFile:null, error:null},
+  syncing: false,
+  noteSyncModal: false,     // 오답노트 클라우드 동기화 설정 모달
+  noteSyncStatus: null,     // {state:'idle'|'syncing'|'ok'|'error', message, at}
+  topicModal: false,        // 주제별로 모아 풀기 피커
+  topicData: null,          // null | {loading:true} | {topics:[{name,count,subjectSet}], total}
   toast: null
 };
 
-/* ---------------------- storage helpers ---------------------- */
+/* ---------------------- storage helpers ----------------------
+   실제 배포(GitHub Pages 등)에서도 동작해야 하므로, 다른 게임 앱들과 동일하게
+   브라우저 localStorage를 사용한다 (window.storage는 Claude 미리보기 전용 API라
+   외부 사이트에서는 존재하지 않아 세트 데이터를 불러오지 못하는 원인이 되었음). */
 async function sGet(key){
-  try{ const r = await window.storage.get(key); return r ? JSON.parse(r.value) : null; }
+  try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
   catch(e){ return null; }
 }
 async function sSet(key, value){
-  try{ await window.storage.set(key, JSON.stringify(value)); return true; }
+  try{ localStorage.setItem(key, JSON.stringify(value)); return true; }
   catch(e){ console.error('storage set failed', key, e); return false; }
 }
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function qid(setId, subject, qnum){ return setId + '::' + subject + '::' + qnum; }
+// "2025년 제2회 기출문제" -> "2025년 2회" 처럼, 세트 이름에서 연도/회차만 뽑아 문제 화면에 짧게 표시한다.
+function formatSetRound(setName){
+  if(!setName) return '';
+  const m = setName.match(/(\d{4})\s*년.*?(\d+)\s*회/);
+  return m ? `${m[1]}년 ${m[2]}회` : setName;
+}
+
+/* ---------------------- 오답노트 클라우드 동기화 (선택) ----------------------
+   오답노트(전체 오답 / 빈번오답 / 마킹) 데이터는 기본적으로 이 브라우저의 localStorage에만
+   저장되어 다른 기기·브라우저에서는 사라진 것처럼 보인다. 이를 보완하기 위해, 어학학습
+   게임들의 gamify.js와 동일한 패턴(Google Apps Script 웹앱을 아주 단순한 key-value
+   저장소로 사용)으로 "동기화 코드" 하나만 공유하면 여러 기기에서 오답노트를 이어볼 수
+   있게 한다. 완전히 선택 사항이며, 설정하지 않으면 기존과 동일하게 이 기기에만 저장된다.
+
+   웹앱 주소(엔드포인트)는 두 가지 방법으로 넣을 수 있다:
+   1) ghg_config.js 파일에 window.GHG_CLOUD_ENDPOINT = '...' 로 한 번만 넣어두면
+      (gamify_config.js와 동일한 방식) 사이트 전체 기본값이 되어, 접속하는 모든 기기가
+      별도 설정 없이 자동으로 이 주소를 쓴다 — 사용자는 "동기화 코드"만 입력하면 된다.
+   2) ghg_config.js를 안 쓰거나 개인적으로 다른 서버를 쓰고 싶으면, 동기화 설정 화면에서
+      직접 웹앱 주소를 입력할 수 있다 (이 개인 설정이 항상 사이트 기본값보다 우선한다). */
+const NOTE_SYNC_CFG_KEY = 'ghg_note_sync_cfg'; // {endpoint, code} — 개인 설정(선택)
+
+function siteDefaultEndpoint(){
+  return (typeof window.GHG_CLOUD_ENDPOINT === 'string' && window.GHG_CLOUD_ENDPOINT) ? window.GHG_CLOUD_ENDPOINT : '';
+}
+function getPersonalSyncConfig(){
+  try{ const v = localStorage.getItem(NOTE_SYNC_CFG_KEY); return v ? JSON.parse(v) : {endpoint:'', code:''}; }
+  catch(e){ return {endpoint:'', code:''}; }
+}
+// 실제로 사용할 설정: 개인 웹앱 주소 > 사이트 기본값(ghg_config.js). 코드는 항상 개인별로 입력.
+function getSyncConfig(){
+  const personal = getPersonalSyncConfig();
+  return {
+    endpoint: personal.endpoint || siteDefaultEndpoint(),
+    code: personal.code || ''
+  };
+}
+function isUsingSiteDefaultEndpoint(){
+  const personal = getPersonalSyncConfig();
+  return !personal.endpoint && !!siteDefaultEndpoint();
+}
+function setSyncConfig(cfg){
+  try{ localStorage.setItem(NOTE_SYNC_CFG_KEY, JSON.stringify(cfg)); }catch(e){ /* ignore */ }
+}
+function isNoteSyncEnabled(){ const c = getSyncConfig(); return !!(c.endpoint && c.code); }
+
+// 마지막 동기화 성공 시각 — 페이지를 새로고침해도 남아있도록 localStorage에 영구 저장(기기별)
+const NOTE_SYNC_LAST_KEY = 'ghg_note_sync_last_at';
+function getLastSyncAt(){
+  try{ const v = localStorage.getItem(NOTE_SYNC_LAST_KEY); return v ? Number(v) : null; }
+  catch(e){ return null; }
+}
+function markSyncSuccess(){
+  const now = Date.now();
+  try{ localStorage.setItem(NOTE_SYNC_LAST_KEY, String(now)); }catch(e){ /* ignore */ }
+  return now;
+}
+// "3분 전" 같은 상대 시각 표기. 하루 넘어가면 날짜·시각으로 표시.
+function formatSyncTime(ts){
+  if(!ts) return '';
+  const diff = Date.now() - ts;
+  if(diff < 60*1000) return '방금 전';
+  if(diff < 60*60*1000) return Math.floor(diff/60000) + '분 전';
+  if(diff < 24*60*60*1000) return Math.floor(diff/3600000) + '시간 전';
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'.'+pad(d.getMonth()+1)+'.'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+
+// 병합 규칙: 오답횟수는 더 큰 값, 마킹은 둘 중 하나라도 켜져 있으면 유지, 최근오답시각은 더 최근 값.
+// (기기 간 충돌을 최소화하기 위한 단순 "더 큰/더 최신 값 우선" 병합 — gamify.js 캐럿 병합과 동일한 사상)
+function mergeNoteSets(local, remote){
+  if(!remote) return local;
+  const merged = {...local};
+  Object.keys(remote).forEach(id => {
+    const r = remote[id];
+    const l = merged[id];
+    if(!l){ merged[id] = r; return; }
+    merged[id] = {
+      wrongCount: Math.max(l.wrongCount||0, r.wrongCount||0),
+      resolved: (l.wrongCount||0) >= (r.wrongCount||0) ? l.resolved : r.resolved,
+      bookmarked: !!(l.bookmarked || r.bookmarked),
+      lastWrongAt: Math.max(l.lastWrongAt||0, r.lastWrongAt||0),
+      snapshot: (r.lastWrongAt||0) > (l.lastWrongAt||0) ? r.snapshot : l.snapshot
+    };
+  });
+  return merged;
+}
+
+async function cloudPushNotes(){
+  const cfg = getSyncConfig();
+  if(!cfg.endpoint || !cfg.code) return;
+  const notes = await getNotes();
+  try{
+    await fetch(cfg.endpoint, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'}, // Apps Script CORS 프리플라이트 회피
+      body: JSON.stringify({code: cfg.code, notes})
+    });
+  }catch(e){ console.error('[note-sync] push failed', e); }
+}
+
+async function cloudPullNotes(){
+  const cfg = getSyncConfig();
+  if(!cfg.endpoint || !cfg.code) return null;
+  try{
+    const res = await fetch(cfg.endpoint + '?action=get&code=' + encodeURIComponent(cfg.code));
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    return (json && json.found) ? json.notes : null;
+  }catch(e){ console.error('[note-sync] pull failed', e); return null; }
+}
+
+// 오답노트 화면에 들어올 때 한 번 호출: 클라우드와 이 기기 데이터를 병합해 양쪽에 동일하게 반영.
+function refreshSyncUI(){
+  if(STATE.view === 'wrongnote') renderWrongNoteBody();
+}
+async function syncNotesNow(){
+  if(!isNoteSyncEnabled()) return;
+  STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
+  refreshSyncUI();
+  const remote = await cloudPullNotes();
+  const local = await getNotes();
+  const merged = mergeNoteSets(local, remote);
+  await sSet('notes', merged);
+  STATE._notesCache = merged;
+  await cloudPushNotes();
+  const at = markSyncSuccess();
+  STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
+  refreshSyncUI();
+}
+
+// 자동 주기 동기화: 동기화가 설정되어 있고, 이 탭이 실제로 보이고 있을 때만 5분마다 조용히 동기화.
+// (백그라운드 탭에서 불필요한 네트워크 요청을 하지 않도록 document.visibilityState를 확인)
+let __ghgAutoSyncTimer = null;
+function startAutoSync(){
+  if(__ghgAutoSyncTimer) return;
+  __ghgAutoSyncTimer = setInterval(async () => {
+    if(document.visibilityState !== 'visible') return;
+    if(!isNoteSyncEnabled()) return;
+    await syncNotesNow();
+  }, 5*60*1000); // 5분마다
+}
 
 /* ---------------------- init ---------------------- */
 async function init(){
   const idx = await sGet('qsets_index');
   STATE.sets = idx || [];
   render();
+  startAutoSync();
 }
 
 /* ---------------------- excel parsing ---------------------- */
-function parseWorkbook(arrayBuffer){
-  const wb = XLSX.read(arrayBuffer, {type:'array'});
-  let dataSheet = null;
-  for(const name of wb.SheetNames){
-    const ws = wb.Sheets[name];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
-    if(rows.length && Array.isArray(rows[0]) && rows[0].some(c => (''+c).trim() === 'set_name')){
-      dataSheet = rows;
-      break;
-    }
-  }
-  if(!dataSheet) throw new Error('업로드 규격(set_name 등 컬럼 헤더)을 찾을 수 없습니다. 기능정의서의 엑셀 템플릿 형식을 확인해주세요.');
-
+// 하나의 엑셀 파일 안에 여러 회차를 Sheet로 나눠 담아도 되도록,
+// set_name 등 규격 헤더를 가진 시트를 모두 찾아 각각 하나의 세트로 파싱한다.
+function parseSheetRows(dataSheet){
   const headerRow = dataSheet[0].map(h => (h===null||h===undefined) ? '' : (''+h).trim());
   const colIdx = {};
   headerRow.forEach((h,i) => { if(h) colIdx[h] = i; });
@@ -330,6 +596,7 @@ function parseWorkbook(arrayBuffer){
     const isCalcRaw = get('is_calculation');
     const isCalc = isCalcRaw === true || (''+isCalcRaw).trim().toUpperCase() === 'TRUE';
     const stepRaw = get('step_explanation');
+    const topicRaw = get('topic_tag');
     rows.push({
       set_name: get('set_name'),
       subject_num: Number(get('subject_num')),
@@ -340,10 +607,31 @@ function parseWorkbook(arrayBuffer){
       answer: Number(get('answer')),
       general_explanation: (get('general_explanation')||'').toString(),
       is_calculation: isCalc,
-      steps: (isCalc && stepRaw) ? (''+stepRaw).split('||').map(s=>s.trim()).filter(Boolean) : []
+      steps: (isCalc && stepRaw) ? (''+stepRaw).split('||').map(s=>s.trim()).filter(Boolean) : [],
+      topic: topicRaw ? (''+topicRaw).trim() : ''
     });
   }
-  return { setName: rows.length ? rows[0].set_name : '이름없는 세트', rows };
+  return rows;
+}
+
+function parseWorkbook(arrayBuffer){
+  const wb = XLSX.read(arrayBuffer, {type:'array'});
+  const found = [];
+  for(const name of wb.SheetNames){
+    const ws = wb.Sheets[name];
+    const rows2d = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+    if(rows2d.length && Array.isArray(rows2d[0]) && rows2d[0].some(c => (''+c).trim() === 'set_name')){
+      found.push({sheetName:name, rows2d});
+    }
+  }
+  if(!found.length) throw new Error('업로드 규격(set_name 등 컬럼 헤더)을 찾을 수 없습니다. 기능정의서의 엑셀 템플릿 형식을 확인해주세요.');
+
+  const results = found.map(f => {
+    const rows = parseSheetRows(f.rows2d);
+    const setName = rows.length ? (rows[0].set_name || f.sheetName) : f.sheetName;
+    return { sheetName: f.sheetName, setName, rows };
+  });
+  return results; // array, even for a single-sheet file
 }
 
 function validateRows(rows){
@@ -375,38 +663,55 @@ function validateRows(rows){
   return {errors, warnings};
 }
 
-async function handleFile(file){
-  STATE.uploadState = {status:'parsing', errors:[], warnings:[], parsed:null};
+// 로컬 파일 업로드 / 깃허브 불러오기가 공유하는 처리 로직.
+// 파일 하나에 세트가 여러 개(Sheet로 구분) 들어있어도 각각 별도 세트로 검증한다.
+async function processWorkbookBuffer(buf, sourceLabel){
+  STATE.uploadState = {status:'parsing', parsed:null, sourceLabel: sourceLabel||''};
   render();
   try{
-    const buf = await file.arrayBuffer();
-    const {setName, rows} = parseWorkbook(buf);
-    const {errors, warnings} = validateRows(rows);
-    STATE.uploadState = {status: errors.length ? 'error' : 'ready', errors, warnings, parsed:{setName, rows}};
+    const sheets = parseWorkbook(buf); // [{sheetName, setName, rows}, ...]
+    const parsed = sheets.map(s => {
+      const {errors, warnings} = validateRows(s.rows);
+      return {...s, errors, warnings};
+    });
+    const anyValid = parsed.some(p => p.errors.length === 0);
+    STATE.uploadState = {status: anyValid ? 'ready' : 'error', parsed, sourceLabel: sourceLabel||''};
   }catch(e){
-    STATE.uploadState = {status:'error', errors:[e.message || '파일을 읽는 중 오류가 발생했습니다.'], warnings:[], parsed:null};
+    STATE.uploadState = {status:'error', parsed:null, fatalError: e.message || '파일을 읽는 중 오류가 발생했습니다.', sourceLabel: sourceLabel||''};
   }
   render();
 }
 
+async function handleFile(file){
+  await processWorkbookBuffer(await file.arrayBuffer(), file.name);
+}
+
 async function confirmUpload(){
-  const {parsed} = STATE.uploadState;
-  if(!parsed) return;
-  const id = uid('set');
-  const questions = parsed.rows.map(r => ({
-    qnum: r.question_num, subject: r.subject_num, question_text: r.question_text,
-    image_url: r.image_url, options: r.options, answer: r.answer,
-    general_explanation: r.general_explanation, is_calculation: r.is_calculation, steps: r.steps
-  })).sort((a,b) => a.qnum - b.qnum);
-  const calcCount = questions.filter(q=>q.is_calculation).length;
-  const setObj = {id, name: parsed.setName || ('세트 ' + (STATE.sets.length+1)), uploadedAt: Date.now(), questions};
-  await sSet('qset_' + id, setObj);
-  const idxEntry = {id, name: setObj.name, uploadedAt: setObj.uploadedAt, total: questions.length, calcCount};
-  STATE.sets = [idxEntry, ...STATE.sets];
+  const us = STATE.uploadState;
+  if(!us || !us.parsed) return;
+  const validSets = us.parsed.filter(p => p.errors.length === 0);
+  if(!validSets.length) return;
+  const newEntries = [];
+  for(const p of validSets){
+    const id = uid('set');
+    const questions = p.rows.map(r => ({
+      qnum: r.question_num, subject: r.subject_num, question_text: r.question_text,
+      image_url: r.image_url, options: r.options, answer: r.answer,
+      general_explanation: r.general_explanation, is_calculation: r.is_calculation, steps: r.steps,
+      topic: r.topic || ''
+    })).sort((a,b) => a.qnum - b.qnum);
+    const calcCount = questions.filter(q=>q.is_calculation).length;
+    const setObj = {id, name: p.setName || ('세트 ' + (STATE.sets.length+1)), uploadedAt: Date.now(), questions};
+    await sSet('qset_' + id, setObj);
+    newEntries.push({id, name: setObj.name, uploadedAt: setObj.uploadedAt, total: questions.length, calcCount});
+  }
+  STATE.sets = [...newEntries, ...STATE.sets];
   await sSet('qsets_index', STATE.sets);
   STATE.uploadModal = false;
   STATE.uploadState = null;
-  STATE.toast = '"' + setObj.name + '" 세트가 등록되었습니다.';
+  STATE.toast = validSets.length > 1
+    ? validSets.length + '개 세트가 등록되었습니다: ' + validSets.map(s=>'"'+s.setName+'"').join(', ')
+    : '"' + validSets[0].setName + '" 세트가 등록되었습니다.';
   render();
   setTimeout(()=>{ STATE.toast=null; render(); }, 2600);
 }
@@ -415,7 +720,7 @@ async function deleteSet(id){
   if(!confirm('이 문제 세트를 삭제하시겠습니까? 저장된 문제 데이터가 삭제됩니다 (오답노트 기록은 유지됩니다).')) return;
   STATE.sets = STATE.sets.filter(s => s.id !== id);
   await sSet('qsets_index', STATE.sets);
-  try{ await window.storage.delete('qset_' + id); }catch(e){}
+  try{ localStorage.removeItem('qset_' + id); }catch(e){}
   render();
 }
 
@@ -428,7 +733,7 @@ async function recordAnswer(setId, setName, q, isCorrect){
   const snapshot = {
     setId, setName, subject:q.subject, qnum:q.qnum, question_text:q.question_text,
     options:q.options, answer:q.answer, general_explanation:q.general_explanation,
-    is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url
+    is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url, topic:q.topic || ''
   };
   const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
   cur.snapshot = snapshot;
@@ -441,6 +746,7 @@ async function recordAnswer(setId, setName, q, isCorrect){
   }
   notes[id] = cur;
   await sSet('notes', notes);
+  if(isNoteSyncEnabled()) cloudPushNotes();
 }
 
 async function toggleBookmark(setId, q){
@@ -449,7 +755,8 @@ async function toggleBookmark(setId, q){
   const snapshot = {
     setId, setName:(STATE.activeSet? STATE.activeSet.name : (q.setName||'')), subject:q.subject, qnum:q.qnum,
     question_text:q.question_text, options:q.options, answer:q.answer,
-    general_explanation:q.general_explanation, is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url
+    general_explanation:q.general_explanation, is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url,
+    topic:q.topic || ''
   };
   const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
   cur.bookmarked = !cur.bookmarked;
@@ -457,6 +764,7 @@ async function toggleBookmark(setId, q){
   notes[id] = cur;
   await sSet('notes', notes);
   render();
+  if(isNoteSyncEnabled()) cloudPushNotes();
 }
 
 async function saveResultHistory(entry){
@@ -488,6 +796,7 @@ async function startWrongOnly(filterList){
     qnum:n.snapshot.qnum, subject:n.snapshot.subject, question_text:n.snapshot.question_text,
     options:n.snapshot.options, answer:n.snapshot.answer, general_explanation:n.snapshot.general_explanation,
     is_calculation:n.snapshot.is_calculation, steps:n.snapshot.steps, image_url:n.snapshot.image_url,
+    topic:n.snapshot.topic || '',
     _setId:n.snapshot.setId, _setName:n.snapshot.setName,
     userAnswer:null, checked:false, correct:null
   }));
@@ -497,19 +806,108 @@ async function startWrongOnly(filterList){
   render();
 }
 
-async function startCalcOnly(filterList){
-  if(!filterList.length){ alert('해당 조건의 계산 문제가 없습니다.'); return; }
-  const list = filterList.map(n => ({
-    qnum:n.qnum, subject:n.subject, question_text:n.question_text,
-    options:n.options, answer:n.answer, general_explanation:n.general_explanation,
-    is_calculation:n.is_calculation, steps:n.steps, image_url:n.image_url,
-    _setId:n.setId, _setName:n.setName,
-    userAnswer:null, checked:false, correct:null
-  }));
+/* ---------------------- 주제별로 모아 풀기 (여러 세트 통합 학습) ----------------------
+   등록된 모든 세트를 불러와 question.topic(엑셀의 topic_tag 컬럼) 기준으로 모아,
+   같은 주제의 문제를 세트 구분 없이 이어서 풀 수 있게 한다. 세트 수가 늘어날수록
+   (예: 10개 세트 = 1000문항) 취약한 주제만 집중적으로 반복할 때 유용하다. */
+async function loadAllSetsFull(){
+  const all = [];
+  for(const s of STATE.sets){
+    const full = await sGet('qset_' + s.id);
+    if(full) all.push(full);
+  }
+  return all;
+}
+
+async function openTopicPicker(){
+  STATE.topicModal = true;
+  STATE.topicData = {loading:true};
+  render();
+  const allSets = await loadAllSetsFull();
+  const map = {}; // topic -> {count, sets:Set}
+  let totalTagged = 0, totalQ = 0;
+  allSets.forEach(full => {
+    full.questions.forEach(q => {
+      totalQ++;
+      if(!q.topic) return;
+      totalTagged++;
+      if(!map[q.topic]) map[q.topic] = {count:0, sets:new Set()};
+      map[q.topic].count++;
+      map[q.topic].sets.add(full.name);
+    });
+  });
+  const topics = Object.keys(map).sort((a,b)=>map[b].count-map[a].count || a.localeCompare(b))
+    .map(name => ({name, count:map[name].count, setCount:map[name].sets.size}));
+  STATE.topicData = {loading:false, topics, totalTagged, totalQ};
+  render();
+}
+function closeTopicPicker(){ STATE.topicModal = false; render(); }
+
+async function startTopicSession(topic){
+  STATE.topicModal = false;
+  const allSets = await loadAllSetsFull();
+  const list = [];
+  allSets.forEach(full => {
+    full.questions.forEach(q => {
+      if(q.topic === topic){
+        list.push({
+          ...q, _setId: full.id, _setName: full.name,
+          userAnswer:null, checked:false, correct:null
+        });
+      }
+    });
+  });
+  if(!list.length){ alert('해당 주제의 문제를 찾을 수 없습니다.'); render(); return; }
+  // 지금 풀고 있던 세션이 있다면(그리고 아직 되돌아갈 세션을 저장해두지 않았다면) 그대로 보존해둔다.
+  if(STATE.view === 'quiz' && STATE.session && !STATE.returnSession){
+    STATE.returnSession = { session: STATE.session, activeSet: STATE.activeSet };
+  }
   STATE.activeSet = null;
-  STATE.session = { mode:'practice', sourceType:'calcOnly', setId:null, setName:'계산문제 모아풀기', list, idx:0 };
+  STATE.session = { mode:'practice', sourceType:'topic', setId:null, setName:'🏷 주제: ' + topic, list, idx:0 };
   STATE.view = 'quiz';
   render();
+}
+
+function returnToPreviousSession(){
+  if(!STATE.returnSession) return;
+  STATE.session = STATE.returnSession.session;
+  STATE.activeSet = STATE.returnSession.activeSet;
+  STATE.returnSession = null;
+  STATE.view = 'quiz';
+  render();
+}
+
+function topicModalHTML(){
+  const td = STATE.topicData;
+  return `
+  <div class="overlay" data-act="overlayCloseTopic">
+    <div class="modal" data-stop="1" style="max-width:560px;">
+      <div class="modal-head">
+        <h3>🏷 주제별로 모아 풀기</h3>
+        <button class="icon-x" data-act="closeTopicPicker">✕</button>
+      </div>
+      <div class="modal-body">
+        ${!td || td.loading ? `<div class="ok-box">등록된 세트를 모두 불러와 주제를 모으는 중입니다…</div>` : (
+          td.topics.length ? `
+            <div class="ok-box" style="margin-bottom:12px;">
+              전체 ${td.totalQ}문항 중 ${td.totalTagged}문항에 주제 태그가 있습니다. 원하는 주제를 선택하면, 등록된 모든 세트에서 그 주제의 문제만 모아 연습 모드로 풀 수 있습니다.
+            </div>
+            <div class="set-pick-list" style="max-height:360px;">
+              ${td.topics.map(t => `
+                <div class="gh-file-row" data-act="pickTopic" data-topic="${escapeHtml(t.name)}">
+                  <span>${escapeHtml(t.name)} <span class="mono" style="color:var(--ink-soft); font-size:11.5px;">(${t.setCount}개 세트)</span></span>
+                  <span class="pick">${t.count}문항 →</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : `<div class="empty">등록된 세트에 주제 태그(topic_tag)가 있는 문제가 없습니다. 엑셀에 topic_tag 컬럼을 추가해 업로드하면 여기에 나타납니다.</div>`
+        )}
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-act="closeTopicPicker">닫기</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function currentQ(){ return STATE.session.list[STATE.session.idx]; }
@@ -583,13 +981,12 @@ async function finalizeResult(){
     if(q.correct) totalCorrect++;
   });
   const isFullSet = STATE.session.sourceType === 'set' && list.length === 100;
-  const isCalcOnly = STATE.session.sourceType === 'calcOnly';
   let subjFail = false;
   Object.values(subjects).forEach(s => { if(s.total>0 && s.correct < SUBJECT_PASS_MIN) subjFail = true; });
   const pass = isFullSet ? (totalCorrect >= PASS_TOTAL && !subjFail) : null;
 
   STATE.lastResult = {
-    setName: STATE.session.setName, mode: STATE.session.mode, isFullSet, isCalcOnly,
+    setName: STATE.session.setName, mode: STATE.session.mode, isFullSet,
     total: list.length, correct: totalCorrect, subjects, pass, subjFail
   };
   if(isFullSet){
@@ -615,10 +1012,16 @@ function render(){
     ${STATE.uploadModal ? uploadModalHTML() : ''}
     ${STATE.navModal && STATE.session ? navModalHTML() : ''}
     ${STATE.calcModal ? calcModalHTML() : ''}
-    <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저 계정에만 저장됩니다</footer>
+    ${STATE.topicModal ? topicModalHTML() : ''}
+    <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저 계정에만 저장됩니다 · build ${APP_VERSION}</footer>
   `;
   bindEvents();
 }
+
+/* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
+   브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
+   또는 재배포를 확인해보세요. */
+const APP_VERSION = '2026-07-18-4';
 
 function topbar(){
   return `
@@ -628,9 +1031,9 @@ function topbar(){
       <div>온실가스 관리기사 학습 플랫폼<small>9월 필기시험 대비 · 기출문제 트레이너</small></div>
     </div>
     <div class="topbar-actions">
-      ${STATE.view!=='home' ? `<button class="btn btn-ghost btn-sm" data-act="home">세트 목록</button>` : ''}
-      <button class="btn btn-ghost btn-sm" data-act="calccollect">📐 계산문제 모아풀기</button>
-      <button class="btn btn-ghost btn-sm" data-act="wrongnote">오답노트</button>
+      ${STATE.view!=='home' ? `<button class="btn-top" data-act="home"><span class="ic">📚</span><span class="lbl">세트 목록</span></button>` : ''}
+      <button class="btn-top" data-act="wrongnote"><span class="ic">✏️</span><span class="lbl">오답노트</span></button>
+      <button class="btn-top accent ${STATE.syncing?'syncing':''}" data-act="openSync"><span class="ic ${STATE.syncing?'spin':''}">🔄</span><span class="lbl">${STATE.syncing?'동기화 중…':'동기화'}</span></button>
     </div>
   </div>`;
 }
@@ -642,7 +1045,6 @@ function renderView(){
     case 'quiz': return renderQuiz();
     case 'result': return renderResult();
     case 'wrongnote': return renderWrongNoteView();
-    case 'calccollect': return renderCalcCollectionView();
     default: return '';
   }
 }
@@ -668,7 +1070,13 @@ function renderHome(){
     <div class="page-title">학습할 기출문제 세트를 선택하세요</div>
     <div class="page-sub">세트당 100문항(5과목 × 20문항) · 실전 모드와 연습 모드를 지원합니다</div>
 
-    <div class="section-row"><h2>내 문제 세트</h2><span class="count">${STATE.sets.length}개 세트</span></div>
+    <div class="section-row">
+      <h2>내 문제 세트</h2>
+      <div style="display:flex; align-items:center; gap:10px;">
+        ${STATE.sets.length ? `<button class="btn btn-sm" data-act="openTopicPicker">🏷 주제별로 모아 풀기</button>` : ''}
+        <span class="count">${STATE.sets.length}개 세트</span>
+      </div>
+    </div>
     ${STATE.sets.length ? `<div class="grid-cards">${cards}
       <div class="upload-card" data-act="openUpload">
         <b>+ 새 문제 세트 업로드</b>
@@ -686,42 +1094,162 @@ function renderHome(){
 async function openUpload(){
   STATE.uploadModal = true;
   STATE.uploadState = null;
+  STATE.uploadTab = 'local';
   render();
+}
+
+// 상단 "동기화" 아이콘: 같은 업로드 모달을 깃허브 탭으로 바로 연다.
+async function openSync(){
+  STATE.uploadModal = true;
+  STATE.uploadState = null;
+  STATE.uploadTab = 'github';
+  render();
+  ghAutoDetect();
+}
+
+function ghAutoDetect(){
+  if(STATE.gh.owner || STATE.gh.repo) return; // already filled in once
+  try{
+    const host = location.hostname;
+    if(host.indexOf('.github.io') === -1) return;
+    const owner = host.split('.')[0];
+    const parts = location.pathname.split('/').filter(Boolean);
+    const repo = parts.length ? parts[0] : '';
+    let folderParts = parts.slice(1);
+    if(folderParts.length && folderParts[folderParts.length-1].indexOf('.') !== -1) folderParts = folderParts.slice(0,-1);
+    STATE.gh.owner = owner; STATE.gh.repo = repo; STATE.gh.path = folderParts.join('/');
+    render();
+  }catch(e){ /* best-effort only */ }
+}
+
+function setGhField(field, val){ STATE.gh[field] = val; }
+
+async function ghListFiles(){
+  const owner = (document.getElementById('ghOwner')||{}).value?.trim() || STATE.gh.owner.trim();
+  const repo = (document.getElementById('ghRepo')||{}).value?.trim() || STATE.gh.repo.trim();
+  const path = ((document.getElementById('ghPath')||{}).value || STATE.gh.path || '').trim().replace(/^\/+|\/+$/g,'');
+  const branch = (document.getElementById('ghBranch')||{}).value?.trim() || STATE.gh.branch.trim();
+  STATE.gh = {...STATE.gh, owner, repo, path, branch, files:null, error:null, listing:true};
+  render();
+  if(!owner || !repo){
+    STATE.gh.listing = false;
+    STATE.gh.error = 'GitHub 사용자명과 저장소 이름을 입력해주세요.';
+    render();
+    return;
+  }
+  let apiUrl = 'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contents';
+  if(path) apiUrl += '/' + path.split('/').map(encodeURIComponent).join('/');
+  if(branch) apiUrl += '?ref=' + encodeURIComponent(branch);
+  try{
+    const res = await fetch(apiUrl, {headers:{'Accept':'application/vnd.github+json'}});
+    if(!res.ok){
+      if(res.status===404) throw new Error('저장소나 폴더를 찾을 수 없습니다. 사용자명·저장소·경로를 확인해주세요.');
+      if(res.status===403) throw new Error('GitHub API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+      throw new Error('GitHub에서 파일 목록을 가져오지 못했습니다.');
+    }
+    const items = await res.json();
+    if(!Array.isArray(items)) throw new Error('입력한 경로가 폴더가 아닙니다.');
+    const files = items.filter(it => it.type==='file' && /\.(xlsx|xls)$/i.test(it.name));
+    STATE.gh.files = files;
+  }catch(e){
+    STATE.gh.error = e.message || 'GitHub에서 파일 목록을 가져오는 중 오류가 발생했습니다.';
+    STATE.gh.files = null;
+  }
+  STATE.gh.listing = false;
+  render();
+}
+
+async function ghLoadFile(name, downloadUrl){
+  STATE.gh.loadingFile = name;
+  render();
+  try{
+    const res = await fetch(downloadUrl);
+    if(!res.ok) throw new Error('파일을 다운로드하지 못했습니다.');
+    const buf = await res.arrayBuffer();
+    await processWorkbookBuffer(buf, name + ' (GitHub)');
+  }catch(e){
+    STATE.uploadState = {status:'error', parsed:null, fatalError: e.message || '파일을 불러오는 중 오류가 발생했습니다.'};
+  }
+  STATE.gh.loadingFile = null;
+  render();
+}
+
+function uploadSetSummaryHTML(p, i){
+  const ok = p.errors.length === 0;
+  return `
+  <div class="set-pick-row ${ok?'':(p.errors.length?'err':'warn')}">
+    <span style="font-size:16px;">${ok?'✅':'⛔️'}</span>
+    <div style="flex:1;">
+      <div><b>${escapeHtml(p.setName||p.sheetName)}</b> <span class="mono" style="color:var(--ink-soft); font-size:11.5px;">(시트: ${escapeHtml(p.sheetName)})</span></div>
+      <div style="font-size:12px; color:var(--ink-soft);">${p.rows.length}문항 ${ok?'· 검증 통과':'· 검증 실패 — 이 세트는 제외되고 등록됩니다'}</div>
+      ${p.errors.length ? `<div class="err-box" style="margin-top:6px;">${p.errors.map(e=>'· '+escapeHtml(e)).join('<br>')}</div>` : ''}
+      ${p.warnings.length ? `<div class="warn-box" style="margin-top:6px;">${p.warnings.map(w=>'· '+escapeHtml(w)).join('<br>')}</div>` : ''}
+    </div>
+  </div>`;
 }
 
 function uploadModalHTML(){
   const us = STATE.uploadState;
+  const tab = STATE.uploadTab || 'local';
+  const gh = STATE.gh;
+
+  const localTabHTML = `
+    <span class="field-label">엑셀 파일 선택 (.xlsx)</span>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="font-size:13.5px;">
+    <div class="ok-box" style="margin-top:14px;">
+      규격: set_name, subject_num(1~5), question_num(1~100), question_text, image_url,
+      option_1~4, answer(1~4), general_explanation, is_calculation(TRUE/FALSE), step_explanation( '||' 구분자 ) 컬럼을
+      포함한 100행 데이터를 업로드하면 자동으로 검증 후 등록됩니다.<br><br>
+      <b>주제별 모아풀기(선택)</b>: <span class="mono">topic_tag</span> 컬럼을 추가해 문제별 주제(예: "GWP", "Scope1 배출", "할당대상업체 지정")를 적어두면, 세트를 넘나들며 같은 주제의 문제만 모아서 반복 학습할 수 있는 "🏷 주제별로 모아 풀기" 기능이 자동으로 활성화됩니다. 여러 세트에서 같은 표현(예: "GWP")을 그대로 재사용해야 서로 묶입니다. 없어도 업로드·학습에는 지장이 없습니다.<br><br>
+      <b>여러 회차를 한 파일로 관리하고 싶다면</b> 엑셀 파일 안에 회차별로 Sheet를 나눠(예: "2025_2회" 시트, "2025_3회" 시트) 각 시트에 규격대로 100행씩 넣어도 됩니다 — 시트마다 자동으로 별도 세트로 인식되어 한 번에 등록됩니다.<br><br>
+      <b>도식(그림) 문제 이미지</b>: image_url에 적은 파일명 그대로 <span class="mono">images/</span> 폴더(이 index.html과 같은 저장소에, 바로 옆 폴더)에 이미지를 올려두면 문제 화면에 실제로 표시됩니다. 회차 간 혼선을 막기 위해 <span class="mono">{연도뒤2자리}_{회차}_q{문제번호}.png</span> 형식을 권장합니다. 예) 2025년 2회 49번 도식 문제 → image_url에 <span class="mono">25_2_q49.png</span> 기입 + <span class="mono">images/25_2_q49.png</span>에 파일 업로드. 파일명이 정확히 일치하지 않으면 이미지 대신 경로 안내 문구가 표시됩니다.
+    </div>
+  `;
+
+  const githubTabHTML = `
+    <div class="gh-field"><label>사용자/조직</label><input type="text" id="ghOwner" placeholder="예: myid" value="${escapeHtml(gh.owner)}"></div>
+    <div class="gh-field"><label>저장소</label><input type="text" id="ghRepo" placeholder="예: my-repo" value="${escapeHtml(gh.repo)}"></div>
+    <div class="gh-field"><label>폴더 경로</label><input type="text" id="ghPath" placeholder="비워두면 저장소 최상위 폴더" value="${escapeHtml(gh.path)}"></div>
+    <div class="gh-field"><label>브랜치</label><input type="text" id="ghBranch" placeholder="비워두면 기본 브랜치 사용" value="${escapeHtml(gh.branch)}"></div>
+    <div class="ok-box" style="margin-bottom:10px;">공개(public) 저장소만 지원합니다. 어학학습 프로그램과 동일한 방식으로, 폴더 안의 .xlsx/.xls 파일 목록을 불러와 클릭 한 번으로 세트를 등록할 수 있습니다.</div>
+    <button class="btn btn-primary btn-sm" data-act="ghList" ${gh.listing?'disabled':''}>${gh.listing?'불러오는 중…':'엑셀 파일 목록 불러오기'}</button>
+    ${gh.error ? `<div class="err-box" style="margin-top:10px;">${escapeHtml(gh.error)}</div>` : ''}
+    ${gh.files ? (gh.files.length ? `
+      <div class="gh-file-list">
+        ${gh.files.map(f => `
+          <div class="gh-file-row" data-act="ghPick" data-name="${escapeHtml(f.name)}" data-url="${escapeHtml(f.download_url)}">
+            <span>${escapeHtml(f.name)}</span>
+            <span class="pick">${gh.loadingFile===f.name ? '불러오는 중…' : '불러오기 →'}</span>
+          </div>`).join('')}
+      </div>
+    ` : `<div class="gh-file-note">이 폴더에서 .xlsx/.xls 파일을 찾지 못했습니다.</div>`) : ''}
+  `;
+
   return `
   <div class="overlay" data-act="overlayClose">
     <div class="modal" data-stop="1">
       <div class="modal-head">
-        <h3>기출문제 엑셀 업로드</h3>
+        <h3>기출문제 세트 업로드 / 동기화</h3>
         <button class="icon-x" data-act="closeUpload">✕</button>
       </div>
       <div class="modal-body">
-        ${!us ? `
-          <span class="field-label">엑셀 파일 선택 (.xlsx)</span>
-          <input type="file" id="fileInput" accept=".xlsx,.xls" style="font-size:13.5px;">
-          <div class="ok-box" style="margin-top:14px;">
-            규격: set_name, subject_num(1~5), question_num(1~100), question_text, image_url,
-            option_1~4, answer(1~4), general_explanation, is_calculation(TRUE/FALSE), step_explanation( '||' 구분자 ) 컬럼을
-            포함한 100행 데이터를 업로드하면 자동으로 검증 후 등록됩니다.
+        <div class="upload-tabs">
+          <button class="upload-tab ${tab==='local'?'active':''}" data-act="uploadTab" data-t="local">📁 로컬 파일 업로드</button>
+          <button class="upload-tab ${tab==='github'?'active':''}" data-act="uploadTab" data-t="github">🔄 깃허브에서 불러오기</button>
+        </div>
+        ${!us ? (tab==='local' ? localTabHTML : githubTabHTML) : ''}
+        ${us && us.status==='parsing' ? `<div class="ok-box">${us.sourceLabel?escapeHtml(us.sourceLabel)+' — ':''}파일을 읽고 유효성을 검증하는 중입니다…</div>` : ''}
+        ${us && us.status==='error' && us.fatalError ? `<div class="err-box"><b>업로드가 취소되었습니다:</b><br>${escapeHtml(us.fatalError)}</div>` : ''}
+        ${us && us.parsed ? `
+          <div class="${us.status==='ready'?'ok-box':'err-box'}" style="margin-bottom:2px;">
+            <b>${us.parsed.length>1 ? us.parsed.length+'개 세트를 찾았습니다 (시트별로 자동 인식)' : '1개 세트를 찾았습니다'}</b>
           </div>
-        ` : ''}
-        ${us && us.status==='parsing' ? `<div class="ok-box">파일을 읽고 유효성을 검증하는 중입니다…</div>` : ''}
-        ${us && us.status==='error' ? `
-          <div class="err-box"><b>업로드가 취소되었습니다 — 다음 오류를 수정 후 다시 시도해주세요:</b><br>
-          ${us.errors.map(e=>'· '+escapeHtml(e)).join('<br>')}</div>
-          ${us.warnings.length ? `<div class="warn-box">${us.warnings.map(w=>'· '+escapeHtml(w)).join('<br>')}</div>` : ''}
-        ` : ''}
-        ${us && us.status==='ready' ? `
-          <div class="ok-box"><b>"${escapeHtml(us.parsed.setName)}"</b> — 총 ${us.parsed.rows.length}문항 검증을 통과했습니다.</div>
-          ${us.warnings.length ? `<div class="warn-box"><b>경고 (등록은 가능하나 확인이 필요합니다):</b><br>${us.warnings.map(w=>'· '+escapeHtml(w)).join('<br>')}</div>` : ''}
+          <div class="set-pick-list">${us.parsed.map((p,i)=>uploadSetSummaryHTML(p,i)).join('')}</div>
         ` : ''}
       </div>
       <div class="modal-foot">
         <button class="btn btn-ghost" data-act="closeUpload">취소</button>
-        ${us && us.status==='ready' ? `<button class="btn btn-primary" data-act="confirmUpload">세트 등록하기</button>` : ''}
+        ${us && us.status==='ready' ? `<button class="btn btn-primary" data-act="confirmUpload">검증 통과한 세트 등록하기</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -736,17 +1264,17 @@ function renderModeSelect(){
   <div class="page-title">${escapeHtml(s.name)}</div>
   <div class="page-sub">${s.total}문항 · 학습 모드를 선택하세요</div>
   <div class="mode-grid">
+    <div class="card mode-card" data-act="startMode" data-mode="practice" data-id="${s.id}">
+      <span class="tag">PRACTICE</span>
+      <h3>연습 모드</h3>
+      <p>문제별로 답을 선택하고 '정답 확인'을 누르면 즉시 O/X와 해설을 볼 수 있습니다.
+      해설은 답을 고르기 전에도 미리 볼 수 있고, 계산 문제는 단계별 풀이 팝업으로 학습할 수 있습니다.</p>
+    </div>
     <div class="card mode-card" data-act="startMode" data-mode="exam" data-id="${s.id}">
       <span class="tag">EXAM</span>
       <h3>실전 모드</h3>
       <p>전체 100문제를 제한 없이 풀이하며, 문제 중간에는 정답이 노출되지 않습니다.
       '최종 제출' 시 채점되어 과목별 통계와 합격 여부를 확인할 수 있습니다.</p>
-    </div>
-    <div class="card mode-card" data-act="startMode" data-mode="practice" data-id="${s.id}">
-      <span class="tag">PRACTICE</span>
-      <h3>연습 모드</h3>
-      <p>문제별로 답을 선택하고 '정답 확인'을 누르면 즉시 O/X와 해설을 볼 수 있습니다.
-      계산 문제는 단계별 풀이 팝업으로 학습할 수 있습니다.</p>
     </div>
   </div>`;
 }
@@ -757,19 +1285,6 @@ function renderQuiz(){
   const q = currentQ();
   const total = sess.list.length;
   const idx = sess.idx;
-
-  const navBtns = sess.list.map((item,i) => {
-    let cls = 'qnav-btn';
-    if(i === idx) cls += ' cur';
-    if(sess.mode === 'practice' && item.checked){
-      cls += item.correct ? ' correct' : ' incorrect';
-    } else if(item.userAnswer !== null){
-      cls += ' answered';
-    }
-    return `<button class="${cls}" data-act="jumpQ" data-i="${i}">${item.qnum}</button>`;
-  }).join('');
-
-  const answeredCount = sess.list.filter(x=>x.userAnswer!==null).length;
 
   const subjectLabel = SUBJECT_NAMES[q.subject] ? `제${q.subject}과목 · ${SUBJECT_NAMES[q.subject]}` : ('과목 ' + q.subject);
   const setNameLabel = q._setName || sess.setName;
@@ -799,23 +1314,44 @@ function renderQuiz(){
       <div class="explain-box"><b>해설.</b> ${escapeHtml(q.general_explanation)}</div>
       ${q.is_calculation ? `<button class="btn btn-primary btn-sm" data-act="openCalc" style="margin-bottom:16px;">📐 단계별 풀이 보기</button>` : ''}
     `;
+  } else if(sess.mode === 'practice' && !q.checked && q.previewExplain){
+    // 연습 모드에서는 정답을 고르기 전에도 해설을 미리 볼 수 있다.
+    feedbackHtml = `
+      <div class="explain-box"><b>💡 해설 미리보기</b> (정답 확인 전 · 오답노트에는 기록되지 않습니다)<br>${escapeHtml(q.general_explanation)}</div>
+      ${q.is_calculation ? `<button class="btn btn-primary btn-sm" data-act="openCalc" style="margin-bottom:16px;">📐 단계별 풀이 보기</button>` : ''}
+    `;
   }
 
   const progressPct = Math.round(((idx+1)/total)*100);
+  const answeredCount = sess.list.filter(x=>x.userAnswer!==null).length;
+  const jumpOptions = sess.list.map((item,i) => {
+    let mark = '·';
+    if(sess.mode === 'practice' && item.checked) mark = item.correct ? '✔' : '✕';
+    else if(item.userAnswer !== null) mark = '●';
+    return `<option value="${i}" ${i===idx?'selected':''}>${mark} ${item.qnum}번</option>`;
+  }).join('');
 
   return `
   <div class="quiz-shell">
+    ${STATE.returnSession ? `
+      <div class="return-session-bar">
+        <span>🏷 잠시 다른 문제를 풀고 있어요 — <b>${escapeHtml(STATE.returnSession.session.setName)}</b>은(는) 그대로 남아있습니다.</span>
+        <button class="btn btn-primary btn-sm" data-act="returnToPreviousSession">◀ 원래 풀던 문제로 돌아가기</button>
+      </div>
+    ` : ''}
     <div class="quiz-progressbar">
-      <button class="btn btn-ghost btn-sm navopen-btn" data-act="openNav">☰ ${idx+1}/${total}</button>
+      <select class="jump-select" data-act="jumpSelect" aria-label="문제 번호로 건너뛰기">${jumpOptions}</select>
       <div class="progress-track"><div class="progress-fill" style="width:${progressPct}%"></div></div>
+      <button class="btn btn-ghost btn-sm navopen-btn" data-act="openNav">📊 ${answeredCount}/${total}</button>
       ${sess.mode==='exam' ? `<button class="btn btn-primary btn-sm" data-act="submitExam">최종 제출</button>`
                             : `<button class="btn btn-primary btn-sm" data-act="finishPractice">종료·결과</button>`}
     </div>
 
     <div class="card quiz-main">
       <div class="q-top">
-        <div class="q-index">${subjectLabel} &nbsp;·&nbsp; 원문제 ${q.qnum}번</div>
+        <div class="q-index">${formatSetRound(setNameLabel)} &nbsp;·&nbsp; ${subjectLabel} &nbsp;·&nbsp; 원문제 ${q.qnum}번</div>
         <div class="q-badges">
+          ${q.topic ? `<span class="badge badge-topic" data-act="startTopicFromBadge" data-topic="${escapeHtml(q.topic)}">🏷 ${escapeHtml(q.topic)}</span>` : ''}
           ${wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${wrongCount}회</span>` : ''}
           ${q.is_calculation ? `<span class="badge badge-calc">계산문제</span>` : ''}
           <span class="badge badge-mark ${bookmarked?'active':''}" data-act="toggleMark">${bookmarked?'★ 마킹됨':'☆ 마킹'}</span>
@@ -823,7 +1359,16 @@ function renderQuiz(){
       </div>
 
       <div class="q-text">${escapeHtml(q.question_text)}</div>
-      ${q.image_url ? `<div class="q-image-note">🖼 도식 이미지: <b>${escapeHtml(q.image_url)}</b> (정적 리소스 경로에 배치된 이미지가 여기에 표시됩니다)</div>` : ''}
+      ${q.image_url ? `
+        <div class="q-image-wrap">
+          <img src="images/${escapeHtml(q.image_url)}" alt="도식 이미지: ${escapeHtml(q.image_url)}" class="q-image"
+               onerror="this.style.display='none'; var f=document.getElementById('imgfallback-${idx}'); if(f) f.style.display='block';">
+          <div id="imgfallback-${idx}" class="q-image-note" style="display:none;">
+            🖼 도식 이미지를 <span class="mono">images/${escapeHtml(q.image_url)}</span> 경로에서 찾지 못했습니다.
+            저장소의 <span class="mono">images</span> 폴더에 정확히 이 파일명으로 이미지를 올렸는지 확인해주세요.
+          </div>
+        </div>
+      ` : ''}
 
       <div class="options">${options}</div>
 
@@ -835,6 +1380,7 @@ function renderQuiz(){
           <button class="btn btn-sm" data-act="nextQ" ${idx===total-1?'disabled':''}>다음 →</button>
         </div>
         <div class="quiz-footer-right">
+          ${sess.mode==='practice' && !q.checked ? `<button class="btn btn-sm" data-act="togglePreviewExplain">${q.previewExplain?'해설 숨기기':'💡 해설 미리보기'}</button>` : ''}
           ${sess.mode==='practice' && !q.checked ? `<button class="btn btn-primary" data-act="checkAnswer" ${q.userAnswer===null?'disabled':''}>정답 확인</button>` : ''}
         </div>
       </div>
@@ -858,23 +1404,54 @@ function navModalHTML(){
     return `<button class="${cls}" data-act="jumpQ" data-i="${i}">${item.qnum}</button>`;
   }).join('');
 
+  // 과목별 진행 현황 (5과목 세트 기준. 주제모아풀기/오답노트 등 혼합 세션도 과목별로 집계됨)
+  const subjMap = {};
+  sess.list.forEach(item => {
+    const s = item.subject;
+    if(!subjMap[s]) subjMap[s] = {done:0, total:0};
+    subjMap[s].total++;
+    if(item.userAnswer !== null) subjMap[s].done++;
+  });
+  const subjRows = Object.keys(subjMap).sort((a,b)=>a-b).map(s => {
+    const {done,total:t} = subjMap[s];
+    const pct = t ? Math.round((done/t)*100) : 0;
+    return `
+      <div class="subj-progress-row">
+        <span class="subj-progress-label">${s}과목</span>
+        <div class="progress-track" style="margin:0 10px;"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <span class="mono" style="font-size:11.5px; color:var(--ink-soft); white-space:nowrap;">${done}/${t}</span>
+      </div>`;
+  }).join('');
+
+  const unanswered = sess.list.filter(x=>x.userAnswer===null);
+  const unansweredLabels = unanswered.map(item =>
+    (sess.sourceType==='set') ? item.qnum : (item._setName ? `${escapeHtml(item._setName)} ${item.qnum}번` : item.qnum)
+  );
+
   return `
   <div class="overlay" data-act="overlayCloseNav">
-    <div class="modal" data-stop="1" style="max-width:460px;">
+    <div class="modal" data-stop="1" style="max-width:480px;">
       <div class="modal-head">
         <div>
-          <h3>문항 목록</h3>
-          <div class="mono" style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">${escapeHtml(sess.setName)} · ${answeredCount}/${total} 답변완료</div>
+          <h3>문항 현황 · 이동</h3>
+          <div class="mono" style="font-size:11.5px; color:var(--ink-soft); margin-top:2px;">${escapeHtml(sess.setName)} · ${answeredCount}/${total} 답변완료 (${unanswered.length}문제 미답)</div>
         </div>
         <button class="icon-x" data-act="closeNav">✕</button>
       </div>
       <div class="modal-body">
+        <div class="subj-progress-list">${subjRows}</div>
         <div class="qnav-grid">${navBtns}</div>
         <div class="qnav-legend">
           <span><span class="swatch" style="background:var(--slate-soft); border:1px solid var(--slate);"></span>답변완료</span>
           <span><span class="swatch" style="background:var(--ok-soft); border:1px solid var(--ok);"></span>정답(연습모드)</span>
           <span><span class="swatch" style="background:var(--danger-soft); border:1px solid var(--danger);"></span>오답(연습모드)</span>
         </div>
+        ${unanswered.length ? `
+          <div class="ok-box" style="margin-top:14px;">
+            <b>안 푼 문제 (${unanswered.length}개)</b><br>
+            ${unansweredLabels.join(', ')}
+          </div>
+        ` : `<div class="ok-box" style="margin-top:14px;">모든 문제에 답변했습니다 🎉</div>`}
       </div>
     </div>
   </div>`;
@@ -932,6 +1509,7 @@ function renderResult(){
 
   return `
   <button class="btn btn-ghost btn-sm" data-act="home" style="margin-bottom:16px;">← 세트 목록으로</button>
+  ${STATE.returnSession ? `<button class="btn btn-primary btn-sm" data-act="returnToPreviousSession" style="margin-bottom:16px; margin-left:8px;">◀ ${escapeHtml(STATE.returnSession.session.setName)}(으)로 돌아가기</button>` : ''}
   <div class="page-title">${escapeHtml(r.setName)} — 학습 결과</div>
   <div class="page-sub">${r.mode==='exam'?'실전 모드':'연습 모드'} 채점 결과입니다</div>
 
@@ -950,7 +1528,7 @@ function renderResult(){
         <span class="result-badge ${r.pass?'pass':'fail'}">${r.pass ? '합격 예상' : '불합격 (과락 또는 총점 미달)'}</span>
         <div class="result-reason">합격 기준: 총점 ${PASS_TOTAL}점 이상 &amp; 과목별 ${SUBJECT_PASS_MIN}문항(40%) 이상 정답.
         ${r.subjFail ? ' 일부 과목이 과락 기준에 미달했습니다 (아래 표의 붉은 막대 확인).' : (r.correct<PASS_TOTAL ? ' 총점이 기준에 미달했습니다.' : ' 모든 조건을 충족했습니다.')}</div>
-      ` : `<div class="result-reason">${r.isCalcOnly ? '계산문제 모아풀기 학습 결과입니다.' : '오답 다시 풀기 또는 일부 문항 학습 결과입니다.'} 전체 100문항 세트를 실전/연습 모드로 풀면 합격 여부가 표시됩니다.</div>`}
+      ` : `<div class="result-reason">오답 다시 풀기 또는 일부 문항 학습 결과입니다. 전체 100문항 세트를 실전/연습 모드로 풀면 합격 여부가 표시됩니다.</div>`}
     </div>
   </div>
 
@@ -963,7 +1541,7 @@ function renderResult(){
   </div>` : ''}
 
   <div style="display:flex; gap:10px; flex-wrap:wrap;">
-    ${r.isCalcOnly ? `<button class="btn btn-primary" data-act="calccollect">계산문제 모아풀기로 이동</button>` : `<button class="btn btn-primary" data-act="wrongnote">오답노트로 이동</button>`}
+    <button class="btn btn-primary" data-act="wrongnote">오답노트로 이동</button>
     <button class="btn" data-act="home">세트 목록으로</button>
   </div>
   `;
@@ -978,12 +1556,112 @@ async function renderWrongNoteView(){
 async function goWrongNote(){
   STATE.view = 'wrongnote';
   render();
-  const notes = await getNotes();
-  STATE._notesCache = notes;
+  if(isNoteSyncEnabled()){
+    STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
+    const remote = await cloudPullNotes();
+    const local = await getNotes();
+    const merged = mergeNoteSets(local, remote);
+    await sSet('notes', merged);
+    STATE._notesCache = merged;
+    const at = markSyncSuccess();
+    STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
+  } else {
+    STATE._notesCache = await getNotes();
+  }
   renderWrongNoteBody();
 }
 
+function noteSyncModalHTML(){
+  const personal = getPersonalSyncConfig();
+  const siteDefault = siteDefaultEndpoint();
+  const usingSiteDefault = isUsingSiteDefaultEndpoint();
+  return `
+  <div class="overlay" data-act="overlayCloseNoteSync">
+    <div class="modal" data-stop="1" style="max-width:560px;">
+      <div class="modal-head">
+        <h3>☁ 오답노트 클라우드 동기화</h3>
+        <button class="icon-x" data-act="closeNoteSync">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="ok-box" style="margin-bottom:14px;">
+          기본적으로 오답노트(전체 오답 · 빈번오답 · 마킹)는 이 브라우저에만 저장됩니다.
+          ${siteDefault
+            ? '이 사이트는 클라우드 동기화 서버가 이미 설정되어 있습니다 — <b>동기화 코드</b>만 입력하면 됩니다. 다른 기기에서도 같은 코드를 넣으면 오답노트가 자동으로 합쳐져서 이어집니다.'
+            : '아래에 <b>동기화 코드</b>와 <b>웹앱 주소</b>를 한 번만 설정해두면, 다른 기기·브라우저에서 같은 코드를 넣었을 때 오답노트가 자동으로 합쳐져서 이어집니다.'}
+          완전히 선택 사항이며, 비워두면 지금처럼 이 기기에만 저장됩니다.
+        </div>
+        <div class="gh-field"><label>동기화 코드 (아무 기기에서나 동일하게 입력)</label>
+          <input type="text" id="syncCode" placeholder="예: 내이름-2026" value="${escapeHtml(personal.code)}"></div>
+
+        ${siteDefault ? `
+          <div class="gh-field">
+            <label>웹앱 주소</label>
+            <div class="ok-box mono" style="margin-top:0; font-size:11.5px; word-break:break-all;">${escapeHtml(siteDefault)} <span style="font-family:'Gothic A1',sans-serif; font-weight:700;">(사이트 기본값 · ghg_config.js)</span></div>
+          </div>
+          <details style="margin-top:6px; font-size:12px; color:var(--ink-soft);">
+            <summary style="cursor:pointer; font-weight:700; color:var(--ink-soft);">다른 웹앱 주소를 개인적으로 쓰고 싶다면?</summary>
+            <div class="gh-field" style="margin-top:8px;">
+              <input type="text" id="syncEndpoint" placeholder="비워두면 위 사이트 기본값을 사용합니다" value="${escapeHtml(personal.endpoint)}">
+            </div>
+          </details>
+        ` : `
+          <div class="gh-field"><label>웹앱 주소 (Google Apps Script 배포 URL)</label>
+            <input type="text" id="syncEndpoint" placeholder="https://script.google.com/macros/s/.../exec" value="${escapeHtml(personal.endpoint)}"></div>
+        `}
+
+        <details style="margin-top:12px; font-size:12.5px; color:var(--ink-soft);" ${siteDefault?'':'open'}>
+          <summary style="cursor:pointer; font-weight:700; color:var(--pine-dark);">웹앱 주소는 어떻게 만드나요? (처음 한 번만 설정, 5분 소요)</summary>
+          <div style="margin-top:8px; line-height:1.7;">
+            1. <a href="https://sheets.google.com" target="_blank" rel="noopener">sheets.google.com</a>에서 새 스프레드시트를 만듭니다 (다른 학습 게임과 별도로 새로 만들어도 되고, 기존 시트를 재사용해도 됩니다).<br>
+            2. 상단 메뉴 <b>확장 프로그램 → Apps Script</b> 클릭 → 기본 코드를 지우고, 아래 "코드 복사" 내용을 붙여넣습니다.<br>
+            3. 저장 후 <b>배포 → 새 배포 → 웹 앱</b> → 실행 계정은 "나", 액세스 권한은 "전체(Anyone)"로 설정 후 배포합니다.<br>
+            4. 나온 <span class="mono">.../exec</span> 주소를 위 "웹앱 주소" 칸에 붙여넣고 저장하면 끝입니다.<br>
+            5. <b>여러 기기에서 매번 주소를 입력하기 번거롭다면</b>: 이 주소를 <span class="mono">ghg_config.js</span> 파일의 <span class="mono">window.GHG_CLOUD_ENDPOINT</span>에 한 번만 넣고 앱과 같은 폴더에 두면, 그 뒤로는 접속하는 모든 기기가 자동으로 이 주소를 쓰고 동기화 코드만 입력하면 됩니다.
+          </div>
+          <div class="warn-box" style="margin-top:10px; white-space:pre-wrap; font-size:11.5px;">function doGet(e){
+  var code=e.parameter.code, sheet=getSheet_();
+  if(e.parameter.action==='get'){
+    var row=findRow_(sheet,code);
+    return json_(row?{found:true,notes:safeParse_(row[1])}:{found:false});
+  }
+  return json_({error:'unknown action'});
+}
+function doPost(e){
+  var body=JSON.parse(e.postData.contents);
+  if(!body||!body.code) return json_({error:'code required'});
+  var sheet=getSheet_(), data=sheet.getDataRange().getValues(), rowIndex=-1;
+  for(var i=1;i&lt;data.length;i++){ if(data[i][0]===body.code){ rowIndex=i+1; break; } }
+  var json=JSON.stringify(body.notes||{}), now=new Date().toISOString();
+  if(rowIndex===-1) sheet.appendRow([body.code,json,now]);
+  else sheet.getRange(rowIndex,1,1,3).setValues([[body.code,json,now]]);
+  return json_({ok:true});
+}
+function getSheet_(){
+  var ss=SpreadsheetApp.getActiveSpreadsheet(), sheet=ss.getSheetByName('ghg_notes');
+  if(!sheet){ sheet=ss.insertSheet('ghg_notes'); sheet.appendRow(['code','notes','updatedAt']); }
+  return sheet;
+}
+function findRow_(sheet,code){
+  var data=sheet.getDataRange().getValues();
+  for(var i=1;i&lt;data.length;i++){ if(data[i][0]===code) return data[i]; }
+  return null;
+}
+function safeParse_(s){ try{ return JSON.parse(s); }catch(e){ return null; } }
+function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }</div>
+        </details>
+      </div>
+      <div class="modal-foot">
+        ${isNoteSyncEnabled() ? `<button class="btn btn-danger" data-act="clearNoteSync">동기화 끄기</button>` : ''}
+        <button class="btn btn-ghost" data-act="closeNoteSync">취소</button>
+        <button class="btn btn-primary" data-act="saveNoteSync">저장하고 동기화</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderWrongNoteBody(){
+
+
   const notes = STATE._notesCache || {};
   const all = Object.keys(notes).map(k => ({id:k, ...notes[k]}));
   let list;
@@ -1008,6 +1686,7 @@ function renderWrongNoteBody(){
             <span>제${s.subject}과목</span>
             <span>#${s.qnum}</span>
             ${n.wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${n.wrongCount}회</span>` : (n.wrongCount>0?`<span class="badge badge-calc">오답 ${n.wrongCount}회</span>`:'')}
+            ${s.topic ? `<span class="badge badge-topic" data-act="startTopicFromBadge" data-topic="${escapeHtml(s.topic)}">🏷 ${escapeHtml(s.topic)}</span>` : ''}
           </div>
           <div class="wrong-item-q">${escapeHtml(s.question_text)}</div>
         </div>
@@ -1023,6 +1702,18 @@ function renderWrongNoteBody(){
     <div class="page-title">오답노트</div>
     <div class="page-sub">틀린 문제를 모아서 다시 풀고, 중요한 문제는 마킹해 시험 직전 최종 점검에 활용하세요</div>
 
+    <div class="note-sync-row">
+      ${isNoteSyncEnabled() ? `
+        <span class="sync-status ${STATE.noteSyncStatus && STATE.noteSyncStatus.state==='syncing' ? 'busy':''}">☁ ${STATE.noteSyncStatus ? escapeHtml(STATE.noteSyncStatus.message) : '동기화 켜짐'}</span>
+        <span class="sync-last">${(() => {
+          const at = (STATE.noteSyncStatus && STATE.noteSyncStatus.at) || getLastSyncAt();
+          return at ? ('마지막 동기화: ' + formatSyncTime(at)) : '아직 동기화 기록 없음';
+        })()}</span>
+        <button class="btn btn-sm" data-act="syncNotesNow">지금 동기화</button>
+      ` : `<span class="sync-status off">이 기기에만 저장됨 · 다른 기기와 이어보려면 동기화를 설정하세요</span>`}
+      <button class="btn btn-sm btn-ghost" data-act="openNoteSync">⚙ 오답노트 동기화 설정</button>
+    </div>
+
     <div class="filter-tabs">
       <button class="filter-tab ${STATE.wrongFilter==='all'?'active':''}" data-act="wfilter" data-f="all">전체 오답 (${activeWrongCount})</button>
       <button class="filter-tab ${STATE.wrongFilter==='freq'?'active':''}" data-act="wfilter" data-f="freq">⚠ 빈번 오답 3회+ (${freqCount})</button>
@@ -1034,94 +1725,7 @@ function renderWrongNoteBody(){
     </div>
 
     ${list.length ? items : `<div class="empty">해당 조건에 맞는 문제가 없습니다.</div>`}
-  `;
-  const mainEl = document.querySelector('main');
-  if(mainEl) mainEl.innerHTML = body;
-  bindEvents();
-}
-
-/* ---------------------- CALC COLLECTION (계산문제 모아풀기) ---------------------- */
-function renderCalcCollectionView(){
-  // placeholder shown briefly while goCalcCollection() loads data asynchronously and re-renders directly into <main>
-  return '<div class="empty">계산 문제를 모으는 중…</div>';
-}
-
-async function goCalcCollection(){
-  STATE.view = 'calccollect';
-  render();
-  const notes = await getNotes();
-  STATE._notesCache = notes;
-
-  const calcList = [];
-  for(const s of STATE.sets){
-    const full = await sGet('qset_' + s.id);
-    if(!full || !full.questions) continue;
-    full.questions.forEach(q => {
-      if(q.is_calculation){
-        calcList.push({
-          id: qid(full.id, q.subject, q.qnum),
-          setId: full.id, setName: full.name,
-          subject: q.subject, qnum: q.qnum, question_text: q.question_text,
-          options: q.options, answer: q.answer, general_explanation: q.general_explanation,
-          is_calculation: q.is_calculation, steps: q.steps, image_url: q.image_url
-        });
-      }
-    });
-  }
-  calcList.sort((a,b) => (a.setName.localeCompare(b.setName)) || (a.subject-b.subject) || (a.qnum-b.qnum));
-  STATE._calcCache = calcList;
-  renderCalcCollectionBody();
-}
-
-function renderCalcCollectionBody(){
-  const all = STATE._calcCache || [];
-  const notes = STATE._notesCache || {};
-  const filter = STATE.calcFilter || 'all';
-  const list = filter === 'all' ? all : all.filter(n => String(n.subject) === filter);
-
-  const subjTabs = [1,2,3,4,5].map(s => {
-    const cnt = all.filter(n => n.subject === s).length;
-    return `<button class="filter-tab ${filter===(''+s)?'active':''}" data-act="calcfilter" data-f="${s}">제${s}과목 (${cnt})</button>`;
-  }).join('');
-
-  const items = list.map(n => {
-    const bookmarked = notes[n.id] ? !!notes[n.id].bookmarked : false;
-    const wrongCount = notes[n.id] ? (notes[n.id].wrongCount||0) : 0;
-    return `
-    <div class="card wrong-item">
-      <div class="wrong-item-top">
-        <div>
-          <div class="wrong-item-meta">
-            <span>${escapeHtml(n.setName)}</span>
-            <span>제${n.subject}과목</span>
-            <span>#${n.qnum}</span>
-            <span class="badge badge-calc">계산문제</span>
-            ${wrongCount>0 ? `<span class="badge badge-freq">오답 ${wrongCount}회</span>` : ''}
-          </div>
-          <div class="wrong-item-q">${escapeHtml(n.question_text)}</div>
-        </div>
-        <button class="star-btn ${bookmarked?'on':''}" data-act="toggleMarkNote" data-id="${n.id}">${bookmarked?'★':'☆'}</button>
-      </div>
-      <div class="wrong-item-actions">
-        <button class="btn btn-sm btn-primary" data-act="calcRetrySingle" data-id="${n.id}">다시 풀기</button>
-      </div>
-    </div>`;
-  }).join('');
-
-  const body = `
-    <div class="page-title">계산문제 모아풀기</div>
-    <div class="page-sub">업로드한 모든 세트에서 계산 문제(is_calculation)만 모아 단계별 풀이로 반복 학습하세요</div>
-
-    <div class="filter-tabs">
-      <button class="filter-tab ${filter==='all'?'active':''}" data-act="calcfilter" data-f="all">전체 (${all.length})</button>
-      ${subjTabs}
-    </div>
-
-    <div style="margin-bottom:18px;">
-      <button class="btn btn-primary" data-act="calcRetryAll" ${list.length===0?'disabled':''}>이 목록 전체 풀기 (${list.length}문항)</button>
-    </div>
-
-    ${list.length ? items : `<div class="empty">${all.length===0 ? '등록된 세트에 계산 문제가 없습니다. 먼저 문제 세트를 업로드해주세요.' : '해당 과목에는 계산 문제가 없습니다.'}</div>`}
+    ${STATE.noteSyncModal ? noteSyncModalHTML() : ''}
   `;
   const mainEl = document.querySelector('main');
   if(mainEl) mainEl.innerHTML = body;
@@ -1134,7 +1738,7 @@ function escapeHtml(str){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function goHome(){ STATE.view='home'; STATE.activeSet=null; STATE.session=null; render(); }
+function goHome(){ STATE.view='home'; STATE.activeSet=null; STATE.session=null; STATE.returnSession=null; render(); }
 
 /* ---------------------- event binding ---------------------- */
 function bindEvents(){
@@ -1144,11 +1748,20 @@ function bindEvents(){
       switch(act){
         case 'home': goHome(); break;
         case 'wrongnote': goWrongNote(); break;
-        case 'calccollect': goCalcCollection(); break;
         case 'openUpload': openUpload(); break;
+        case 'openTopicPicker': await openTopicPicker(); break;
+        case 'closeTopicPicker': closeTopicPicker(); break;
+        case 'overlayCloseTopic': if(e.target === el) closeTopicPicker(); break;
+        case 'pickTopic': await startTopicSession(el.getAttribute('data-topic')); break;
+        case 'startTopicFromBadge': await startTopicSession(el.getAttribute('data-topic')); break;
+        case 'returnToPreviousSession': returnToPreviousSession(); break;
+        case 'openSync': openSync(); break;
         case 'closeUpload': STATE.uploadModal=false; STATE.uploadState=null; render(); break;
         case 'overlayClose': if(e.target === el) { STATE.uploadModal=false; STATE.uploadState=null; render(); } break;
         case 'confirmUpload': confirmUpload(); break;
+        case 'uploadTab': STATE.uploadTab = el.getAttribute('data-t'); render(); break;
+        case 'ghList': await ghListFiles(); break;
+        case 'ghPick': await ghLoadFile(el.getAttribute('data-name'), el.getAttribute('data-url')); break;
         case 'openMode': STATE._pendingSetId = el.getAttribute('data-id'); STATE.view='mode'; render(); break;
         case 'deleteSet': deleteSet(el.getAttribute('data-id')); break;
         case 'startMode': {
@@ -1164,6 +1777,7 @@ function bindEvents(){
         case 'jumpQ': gotoIdx(Number(el.getAttribute('data-i'))); break;
         case 'selectOpt': selectOption(Number(el.getAttribute('data-n'))); break;
         case 'checkAnswer': checkAnswer(); break;
+        case 'togglePreviewExplain': { const q = currentQ(); q.previewExplain = !q.previewExplain; render(); break; }
         case 'nextQ': nextQ(); break;
         case 'prevQ': prevQ(); break;
         case 'submitExam': submitExam(); break;
@@ -1180,24 +1794,35 @@ function bindEvents(){
           break;
         }
         case 'wfilter': STATE.wrongFilter = el.getAttribute('data-f'); renderWrongNoteBody(); break;
+        case 'openNoteSync': STATE.noteSyncModal = true; renderWrongNoteBody(); break;
+        case 'closeNoteSync': STATE.noteSyncModal = false; renderWrongNoteBody(); break;
+        case 'overlayCloseNoteSync': if(e.target === el){ STATE.noteSyncModal = false; renderWrongNoteBody(); } break;
+        case 'saveNoteSync': {
+          const code = (document.getElementById('syncCode')||{}).value?.trim() || '';
+          const endpointInput = document.getElementById('syncEndpoint');
+          const endpoint = endpointInput ? (endpointInput.value||'').trim() : '';
+          setSyncConfig({code, endpoint});
+          STATE.noteSyncModal = false;
+          if(isNoteSyncEnabled()) await syncNotesNow();
+          else STATE._notesCache = await getNotes();
+          renderWrongNoteBody();
+          break;
+        }
+        case 'clearNoteSync': {
+          setSyncConfig({code:'', endpoint:''});
+          STATE.noteSyncModal = false;
+          STATE.noteSyncStatus = null;
+          renderWrongNoteBody();
+          break;
+        }
+        case 'syncNotesNow': await syncNotesNow(); break;
         case 'toggleMarkNote': {
           const id = el.getAttribute('data-id');
           const notes = STATE._notesCache;
-          if(!notes[id]){
-            // 아직 한번도 풀거나 마킹한 적 없는 문제(예: 계산문제 모아풀기에서 처음 마킹)에 대한 신규 노트 생성
-            const src = (STATE._calcCache||[]).find(x => x.id === id);
-            const snapshot = src ? {
-              setId:src.setId, setName:src.setName, subject:src.subject, qnum:src.qnum,
-              question_text:src.question_text, options:src.options, answer:src.answer,
-              general_explanation:src.general_explanation, is_calculation:src.is_calculation,
-              steps:src.steps, image_url:src.image_url
-            } : null;
-            notes[id] = {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
-          }
           notes[id].bookmarked = !notes[id].bookmarked;
           await sSet('notes', notes);
-          if(STATE.view === 'calccollect') renderCalcCollectionBody();
-          else renderWrongNoteBody();
+          renderWrongNoteBody();
+          if(isNoteSyncEnabled()) cloudPushNotes();
           break;
         }
         case 'retrySingle': {
@@ -1216,20 +1841,6 @@ function bindEvents(){
           startWrongOnly(list);
           break;
         }
-        case 'calcfilter': STATE.calcFilter = el.getAttribute('data-f'); renderCalcCollectionBody(); break;
-        case 'calcRetrySingle': {
-          const id = el.getAttribute('data-id');
-          const n = (STATE._calcCache||[]).find(x => x.id === id);
-          if(n) startCalcOnly([n]);
-          break;
-        }
-        case 'calcRetryAll': {
-          const all = STATE._calcCache || [];
-          const filter = STATE.calcFilter || 'all';
-          const list = filter === 'all' ? all : all.filter(n => String(n.subject) === filter);
-          startCalcOnly(list);
-          break;
-        }
       }
     };
   });
@@ -1237,6 +1848,10 @@ function bindEvents(){
   const fileInput = document.getElementById('fileInput');
   if(fileInput){
     fileInput.onchange = (e) => { if(e.target.files[0]) handleFile(e.target.files[0]); };
+  }
+  const jumpSelect = document.querySelector('.jump-select');
+  if(jumpSelect){
+    jumpSelect.onchange = (e) => { gotoIdx(Number(e.target.value)); };
   }
   document.querySelectorAll('[data-stop]').forEach(el => { el.onclick = (e) => e.stopPropagation(); });
 }
