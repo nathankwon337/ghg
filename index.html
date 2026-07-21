@@ -443,6 +443,46 @@ function formatSetRound(setName){
   const m = setName.match(/(\d{4})\s*년.*?(\d+)\s*회/);
   return m ? `${m[1]}년 ${m[2]}회` : setName;
 }
+// 세트를 기기 간에 동일한 세트로 인식시키기 위한 "정규화된 이름" 키.
+// 세트 내부 ID(uid())는 엑셀을 업로드한 기기마다 랜덤하게 새로 생성되므로, 같은 "2025년 2회" 엑셀을
+// 모바일/PC에 각각 올려도 내부 ID는 서로 다르다. 그래서 클라우드 동기화(오답노트·완주기록)는
+// 내부 ID가 아니라 이 정규화된 세트 "이름"을 기준으로 같은 세트인지 판별해야 한다.
+function setKey(name){ return formatSetRound(name || '') || (name||'').trim(); }
+
+// 로컬 저장된 notes(문제별 풀이기록)를 클라우드에 올리기 전, 각 키의 "내부 세트ID" 부분을
+// 이 기기와 무관한 "세트 이름" 기반으로 바꿔준다 (다른 기기도 이 이름으로 다시 매칭할 수 있도록).
+function notesToCloudFormat(notes){
+  const idToNameKey = {};
+  (STATE.sets||[]).forEach(s => { idToNameKey[s.id] = setKey(s.name); });
+  const out = {};
+  Object.keys(notes||{}).forEach(k => {
+    const idx = k.indexOf('::');
+    if(idx === -1){ out[k] = notes[k]; return; }
+    const setPart = k.slice(0, idx);
+    const rest = k.slice(idx + 1);
+    const snapshotName = notes[k] && notes[k].snapshot && notes[k].snapshot.setName;
+    const nameKey = idToNameKey[setPart] || (snapshotName ? setKey(snapshotName) : setPart);
+    out[nameKey + '::' + rest] = notes[k];
+  });
+  return out;
+}
+// 클라우드에서 받은(세트 이름 기반 키의) notes를, 이 기기의 로컬 세트ID 기반 키로 다시 변환한다.
+// 이 기기에 아직 그 이름의 세트가 없으면(엑셀 미업로드) 이름 기반 키 그대로 남겨두고,
+// 나중에 그 세트를 업로드한 뒤 다시 동기화하면 자동으로 로컬 ID와 연결된다.
+function notesFromCloudFormat(cloudNotes){
+  const nameKeyToId = {};
+  (STATE.sets||[]).forEach(s => { nameKeyToId[setKey(s.name)] = s.id; });
+  const out = {};
+  Object.keys(cloudNotes||{}).forEach(k => {
+    const idx = k.indexOf('::');
+    if(idx === -1){ out[k] = cloudNotes[k]; return; }
+    const namePart = k.slice(0, idx);
+    const rest = k.slice(idx + 1);
+    const localId = nameKeyToId[namePart];
+    out[(localId || namePart) + '::' + rest] = cloudNotes[k];
+  });
+  return out;
+}
 
 /* ---------------------- 오답노트 클라우드 동기화 (선택) ----------------------
    오답노트(전체 오답 / 빈번오답 / 마킹) 데이터는 기본적으로 이 브라우저의 localStorage에만
@@ -551,7 +591,7 @@ function mergeResultsHistory(local, remote){
 async function cloudPushNotes(){
   const cfg = getSyncConfig();
   if(!cfg.endpoint || !cfg.code) return {ok:false, error:'동기화 코드/웹앱 주소가 설정되지 않았습니다.'};
-  const notes = await getNotes();
+  const notes = notesToCloudFormat(await getNotes());
   const resultsHistory = (await sGet('results_history')) || [];
   try{
     // Apps Script 웹앱은 실제 응답을 script.googleusercontent.com으로 리다이렉트하는데,
@@ -610,7 +650,7 @@ async function syncNotesNow(){
   }
   const localNotes = await getNotes();
   const localHistory = (await sGet('results_history')) || [];
-  const mergedNotes = mergeNoteSets(localNotes, pull.notes);
+  const mergedNotes = mergeNoteSets(localNotes, notesFromCloudFormat(pull.notes));
   const mergedHistory = mergeResultsHistory(localHistory, pull.resultsHistory);
   await sSet('notes', mergedNotes);
   await sSet('results_history', mergedHistory);
@@ -636,7 +676,7 @@ async function silentSyncPullMerge(){
   if(!remote.ok){ STATE.noteSyncStatus = {state:'error', message:'⚠ 동기화 실패: ' + remote.error}; return; }
   const localNotes = await getNotes();
   const localHistory = (await sGet('results_history')) || [];
-  const mergedNotes = mergeNoteSets(localNotes, remote.notes);
+  const mergedNotes = mergeNoteSets(localNotes, notesFromCloudFormat(remote.notes));
   const mergedHistory = mergeResultsHistory(localHistory, remote.resultsHistory);
   await sSet('notes', mergedNotes);
   await sSet('results_history', mergedHistory);
@@ -1171,7 +1211,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-6';
+const APP_VERSION = '2026-07-21-8';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
@@ -1213,8 +1253,9 @@ function renderView(){
 function renderHome(){
   const cards = STATE.sets.map(s => {
     // 이 세트를 전체(100문항) 단위로 완주한 기록 — results_history는 isFullSet인 경우에만 저장되므로
-    // setId로 필터링한 개수가 곧 "몇 회 풀었는지"가 된다.
-    const setHistory = (STATE.resultsHistory||[]).filter(h => h.setId === s.id);
+    // 세트 "이름"으로 필터링한 개수가 곧 "몇 회 풀었는지"가 된다.
+    // (내부 세트ID는 기기마다 랜덤 생성되어 다르므로 이름 기준으로 매칭해야 다른 기기의 완주기록도 인식된다)
+    const setHistory = (STATE.resultsHistory||[]).filter(h => setKey(h.setName) === setKey(s.name));
     const solveCount = setHistory.length;
     const lastEntry = setHistory[0]; // saveResultHistory가 unshift하므로 첫 항목이 최신
     return `
@@ -1731,6 +1772,10 @@ async function openStats(){
   STATE.view = 'stats';
   STATE.statsData = {loading:true};
   render();
+  // 세트 목록이 어떤 이유로든 메모리 상에서 비어있거나 오래된 상태일 수 있으므로,
+  // 통계를 계산하기 직전에 저장소에서 한 번 더 확실히 다시 읽어온다.
+  const freshIdx = await sGet('qsets_index');
+  if(freshIdx) STATE.sets = freshIdx;
   await silentSyncPullMerge();
   STATE.statsData = await computeStatsData();
   render();
@@ -1754,7 +1799,7 @@ async function computeStatsData(){
       if(n >= 1){ attemptedQ++; setAttempted++; }
       passBuckets.forEach(k => { if(n >= k) bucketCounts[k]++; });
     });
-    const setHistory = history.filter(h => h.setId === full.id);
+    const setHistory = history.filter(h => setKey(h.setName) === setKey(full.name));
     perSet.push({
       id: full.id, name: full.name, total: setTotal, attempted: setAttempted,
       completions: setHistory.length,
@@ -1864,7 +1909,7 @@ async function goWrongNote(){
     if(remote.ok){
       const local = await getNotes();
       const localHistory = (await sGet('results_history')) || [];
-      const merged = mergeNoteSets(local, remote.notes);
+      const merged = mergeNoteSets(local, notesFromCloudFormat(remote.notes));
       const mergedHistory = mergeResultsHistory(localHistory, remote.resultsHistory);
       await sSet('notes', merged);
       await sSet('results_history', mergedHistory);
@@ -2081,6 +2126,8 @@ function escapeHtml(str){
 
 async function goHome(){
   STATE.view='home'; STATE.activeSet=null; STATE.session=null; STATE.returnSession=null;
+  const freshIdx = await sGet('qsets_index');
+  if(freshIdx) STATE.sets = freshIdx;
   await silentSyncPullMerge();
   await loadResultsHistory();
   render();
