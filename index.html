@@ -287,6 +287,7 @@
   .sync-status{font-size:12.5px; font-weight:700; color:var(--pine-dark);}
   .sync-status.off{color:var(--ink-soft); font-weight:600;}
   .sync-status.busy{color:var(--slate);}
+  .sync-status.error{color:var(--danger);}
   .sync-last{font-size:11.5px; color:var(--ink-soft);}
 
   .filter-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
@@ -545,32 +546,45 @@ function mergeResultsHistory(local, remote){
   return list.slice(0, 200);
 }
 
+// 반환값: {ok, error?} — 실제 성공/실패 여부를 그대로 알려준다.
+// (예전 버전은 실패해도 콘솔에만 로그를 남기고 화면엔 항상 "성공"으로 표시되는 버그가 있었음)
 async function cloudPushNotes(){
   const cfg = getSyncConfig();
-  if(!cfg.endpoint || !cfg.code) return;
+  if(!cfg.endpoint || !cfg.code) return {ok:false, error:'동기화 코드/웹앱 주소가 설정되지 않았습니다.'};
   const notes = await getNotes();
   const resultsHistory = (await sGet('results_history')) || [];
   try{
-    await fetch(cfg.endpoint, {
+    const res = await fetch(cfg.endpoint, {
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'}, // Apps Script CORS 프리플라이트 회피
       body: JSON.stringify({code: cfg.code, notes, resultsHistory})
     });
-  }catch(e){ console.error('[note-sync] push failed', e); }
+    if(!res.ok) throw new Error('서버 응답 오류 (HTTP ' + res.status + ')');
+    const json = await res.json().catch(() => null);
+    if(json && json.error) throw new Error(json.error);
+    return {ok:true};
+  }catch(e){
+    console.error('[note-sync] push failed', e);
+    return {ok:false, error: (e && e.message) || '서버에 연결할 수 없습니다. 웹앱 주소/배포 상태를 확인해주세요.'};
+  }
 }
 
-// 반환값: {notes, resultsHistory} — 예전 백엔드(resultsHistory 미지원)와도 호환되도록
-// 필드가 없으면 빈 값으로 채운다.
+// 반환값: {ok, error?, notes, resultsHistory} — 예전 백엔드(resultsHistory 미지원)와도 호환되도록
+// 필드가 없으면 빈 값으로 채운다. 해당 코드가 서버에 아직 없는 경우(최초 동기화)도 ok:true, 빈 값으로 처리한다.
 async function cloudPullNotes(){
   const cfg = getSyncConfig();
-  if(!cfg.endpoint || !cfg.code) return null;
+  if(!cfg.endpoint || !cfg.code) return {ok:false, error:'동기화 코드/웹앱 주소가 설정되지 않았습니다.'};
   try{
     const res = await fetch(cfg.endpoint + '?action=get&code=' + encodeURIComponent(cfg.code));
-    if(!res.ok) throw new Error('HTTP ' + res.status);
+    if(!res.ok) throw new Error('서버 응답 오류 (HTTP ' + res.status + ')');
     const json = await res.json();
-    if(!json || !json.found) return null;
-    return { notes: json.notes || {}, resultsHistory: json.resultsHistory || [] };
-  }catch(e){ console.error('[note-sync] pull failed', e); return null; }
+    if(json && json.error) throw new Error(json.error);
+    if(!json || !json.found) return {ok:true, notes:{}, resultsHistory:[]};
+    return {ok:true, notes: json.notes || {}, resultsHistory: json.resultsHistory || []};
+  }catch(e){
+    console.error('[note-sync] pull failed', e);
+    return {ok:false, error: (e && e.message) || '서버에 연결할 수 없습니다. 웹앱 주소/배포 상태를 확인해주세요.'};
+  }
 }
 
 // 오답노트/통계/세트목록 화면에 들어올 때 호출: 클라우드와 이 기기 데이터를 병합해 양쪽에 동일하게 반영.
@@ -582,27 +596,38 @@ async function syncNotesNow(){
   if(!isNoteSyncEnabled()) return;
   STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
   refreshSyncUI();
-  const remote = await cloudPullNotes();
+  const pull = await cloudPullNotes();
+  if(!pull.ok){
+    STATE.noteSyncStatus = {state:'error', message:'⚠ 동기화 실패: ' + pull.error};
+    refreshSyncUI();
+    return;
+  }
   const localNotes = await getNotes();
   const localHistory = (await sGet('results_history')) || [];
-  const mergedNotes = mergeNoteSets(localNotes, remote ? remote.notes : null);
-  const mergedHistory = mergeResultsHistory(localHistory, remote ? remote.resultsHistory : null);
+  const mergedNotes = mergeNoteSets(localNotes, pull.notes);
+  const mergedHistory = mergeResultsHistory(localHistory, pull.resultsHistory);
   await sSet('notes', mergedNotes);
   await sSet('results_history', mergedHistory);
   STATE._notesCache = mergedNotes;
   STATE.resultsHistory = mergedHistory;
-  await cloudPushNotes();
+  const push = await cloudPushNotes();
+  if(!push.ok){
+    STATE.noteSyncStatus = {state:'error', message:'⚠ 서버로 올리는 데 실패했습니다: ' + push.error};
+    refreshSyncUI();
+    return;
+  }
   const at = markSyncSuccess();
   STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
   refreshSyncUI();
 }
 
 // 다른 기기와의 병합 결과를 화면에 별도 상태 표시 없이 조용히 반영할 때 쓰는 헬퍼
-// (세트 목록/학습 통계 화면 진입 시 자동 호출 — 오답노트 화면처럼 상단에 동기화 상태 문구를 띄우진 않는다).
+// (세트 목록/학습 통계 화면 진입 시 자동 호출 — 오답노트 화면처럼 상단에 동기화 상태 문구를 띄우진 않지만,
+//  실패했을 경우엔 STATE.noteSyncStatus에 에러를 남겨 다음에 오답노트 화면에 가면 확인할 수 있게 한다).
 async function silentSyncPullMerge(){
   if(!isNoteSyncEnabled()) return;
   const remote = await cloudPullNotes();
-  if(!remote) return;
+  if(!remote.ok){ STATE.noteSyncStatus = {state:'error', message:'⚠ 동기화 실패: ' + remote.error}; return; }
   const localNotes = await getNotes();
   const localHistory = (await sGet('results_history')) || [];
   const mergedNotes = mergeNoteSets(localNotes, remote.notes);
@@ -1140,11 +1165,12 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-2';
+const APP_VERSION = '2026-07-21-3';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
   const lastAt = getLastSyncAt();
+  const syncFailed = STATE.noteSyncStatus && STATE.noteSyncStatus.state === 'error';
   return `
   <div class="topbar">
     <div class="brand" onclick="goHome()" style="cursor:pointer;">
@@ -1155,8 +1181,8 @@ function topbar(){
       ${STATE.view!=='home' ? `<button class="btn-top" data-act="home"><span class="ic">📚</span><span class="lbl">세트 목록</span></button>` : ''}
       <button class="btn-top" data-act="openStats"><span class="ic">📊</span><span class="lbl">학습 통계</span></button>
       <button class="btn-top" data-act="wrongnote"><span class="ic">✏️</span><span class="lbl">오답노트</span></button>
-      <button class="btn-top ${syncOn?'accent':''}" data-act="openNoteSync" title="문제별 풀이횟수·오답노트·완주기록을 다른 기기와 동기화">
-        <span class="ic">☁</span><span class="lbl">${syncOn ? '기록 동기화'+(lastAt?' · '+formatSyncTime(lastAt):'') : '기록 동기화 설정'}</span>
+      <button class="btn-top ${syncOn && !syncFailed?'accent':''}" data-act="openNoteSync" title="${syncFailed ? '⚠ 최근 동기화 실패 — 눌러서 확인' : '문제별 풀이횟수·오답노트·완주기록을 다른 기기와 동기화'}" style="${syncFailed?'border-color:var(--danger); color:var(--danger);':''}">
+        <span class="ic">${syncFailed?'⚠':'☁'}</span><span class="lbl">${syncFailed ? '동기화 실패' : (syncOn ? '기록 동기화'+(lastAt?' · '+formatSyncTime(lastAt):'') : '기록 동기화 설정')}</span>
       </button>
       <button class="btn-top ${STATE.syncing?'syncing':''}" data-act="openSync" title="GitHub 저장소에서 기출문제 엑셀 파일 가져오기">
         <span class="ic ${STATE.syncing?'spin':''}">📥</span><span class="lbl">${STATE.syncing?'가져오는 중…':'문제세트 가져오기'}</span>
@@ -1829,16 +1855,21 @@ async function goWrongNote(){
   if(isNoteSyncEnabled()){
     STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
     const remote = await cloudPullNotes();
-    const local = await getNotes();
-    const localHistory = (await sGet('results_history')) || [];
-    const merged = mergeNoteSets(local, remote ? remote.notes : null);
-    const mergedHistory = mergeResultsHistory(localHistory, remote ? remote.resultsHistory : null);
-    await sSet('notes', merged);
-    await sSet('results_history', mergedHistory);
-    STATE._notesCache = merged;
-    STATE.resultsHistory = mergedHistory;
-    const at = markSyncSuccess();
-    STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
+    if(remote.ok){
+      const local = await getNotes();
+      const localHistory = (await sGet('results_history')) || [];
+      const merged = mergeNoteSets(local, remote.notes);
+      const mergedHistory = mergeResultsHistory(localHistory, remote.resultsHistory);
+      await sSet('notes', merged);
+      await sSet('results_history', mergedHistory);
+      STATE._notesCache = merged;
+      STATE.resultsHistory = mergedHistory;
+      const at = markSyncSuccess();
+      STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
+    } else {
+      STATE._notesCache = await getNotes();
+      STATE.noteSyncStatus = {state:'error', message:'⚠ 동기화 실패: ' + remote.error};
+    }
   } else {
     STATE._notesCache = await getNotes();
   }
@@ -2000,7 +2031,7 @@ function renderWrongNoteBody(){
 
     <div class="note-sync-row">
       ${isNoteSyncEnabled() ? `
-        <span class="sync-status ${STATE.noteSyncStatus && STATE.noteSyncStatus.state==='syncing' ? 'busy':''}">☁ ${STATE.noteSyncStatus ? escapeHtml(STATE.noteSyncStatus.message) : '동기화 켜짐'}</span>
+        <span class="sync-status ${STATE.noteSyncStatus && STATE.noteSyncStatus.state==='syncing' ? 'busy':''} ${STATE.noteSyncStatus && STATE.noteSyncStatus.state==='error' ? 'error':''}">☁ ${STATE.noteSyncStatus ? escapeHtml(STATE.noteSyncStatus.message) : '동기화 켜짐'}</span>
         <span class="sync-last">${(() => {
           const at = (STATE.noteSyncStatus && STATE.noteSyncStatus.at) || getLastSyncAt();
           return at ? ('마지막 동기화: ' + formatSyncTime(at)) : '아직 동기화 기록 없음';
