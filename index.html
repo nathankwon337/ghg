@@ -602,6 +602,7 @@ async function cloudPushNotesRaw(){
     await fetch(cfg.endpoint, {
       method:'POST',
       mode:'no-cors',
+      cache:'no-store',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({code: cfg.code, notes, resultsHistory})
     });
@@ -633,7 +634,11 @@ async function cloudPullNotes(){
   const cfg = getSyncConfig();
   if(!cfg.endpoint || !cfg.code) return {ok:false, error:'동기화 코드/웹앱 주소가 설정되지 않았습니다.'};
   try{
-    const res = await fetch(cfg.endpoint + '?action=get&code=' + encodeURIComponent(cfg.code));
+    // 캐시 방지: 일부 모바일 브라우저는 동일한 GET URL을 예전 응답 그대로 재사용(캐시)해버려서,
+    // 서버 데이터가 실제로 바뀌었는데도 화면엔 계속 옛날 내용만 보이는 문제가 있었다.
+    // 매번 다른 타임스탬프를 붙이고 cache:'no-store'를 명시해 반드시 네트워크로 새로 요청하게 한다.
+    const url = cfg.endpoint + '?action=get&code=' + encodeURIComponent(cfg.code) + '&_=' + Date.now();
+    const res = await fetch(url, {cache:'no-store'});
     if(!res.ok) throw new Error('서버 응답 오류 (HTTP ' + res.status + ')');
     const json = await res.json();
     if(json && json.error) throw new Error(json.error);
@@ -1224,7 +1229,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-9';
+const APP_VERSION = '2026-07-21-10';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
