@@ -1165,7 +1165,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-3';
+const APP_VERSION = '2026-07-21-4';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
@@ -1880,6 +1880,7 @@ function noteSyncModalHTML(){
   const personal = getPersonalSyncConfig();
   const siteDefault = siteDefaultEndpoint();
   const usingSiteDefault = isUsingSiteDefaultEndpoint();
+  const status = STATE.noteSyncStatus;
   return `
   <div class="overlay" data-act="overlayCloseNoteSync">
     <div class="modal" data-stop="1" style="max-width:560px;">
@@ -1888,6 +1889,12 @@ function noteSyncModalHTML(){
         <button class="icon-x" data-act="closeNoteSync">✕</button>
       </div>
       <div class="modal-body">
+        ${status ? `
+          <div class="${status.state==='error' ? 'err-box' : (status.state==='syncing' ? 'warn-box' : 'ok-box')}" style="margin-bottom:14px;">
+            ${status.state==='syncing' ? '🔄 ' : (status.state==='error' ? '⚠ ' : '✅ ')}${escapeHtml(status.message)}
+            ${status.state==='error' ? `<div style="margin-top:8px; font-size:11.5px; opacity:.85;">코드/웹앱 주소가 맞는지 다시 확인하거나, 아래 "지금 동기화"를 다시 눌러보세요.</div>` : ''}
+          </div>
+        ` : ''}
         <div class="ok-box" style="margin-bottom:14px;">
           기본적으로 학습 기록(문제별 풀이횟수 · 오답노트 · 빈번오답 · 마킹 · 세트별 완주횟수/점수 · 학습 통계)은
           이 브라우저에만 저장됩니다.
@@ -1978,6 +1985,7 @@ function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).set
       </div>
       <div class="modal-foot">
         ${isNoteSyncEnabled() ? `<button class="btn btn-danger" data-act="clearNoteSync">동기화 끄기</button>` : ''}
+        ${isNoteSyncEnabled() ? `<button class="btn" data-act="syncNotesNow">🔄 지금 다시 시도</button>` : ''}
         <button class="btn btn-ghost" data-act="closeNoteSync">취소</button>
         <button class="btn btn-primary" data-act="saveNoteSync">저장하고 동기화</button>
       </div>
