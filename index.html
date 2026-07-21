@@ -121,7 +121,20 @@
   .set-card .name{font-weight:800; font-size:15.5px; color:var(--pine-dark);}
   .set-card .meta{font-size:12.5px; color:var(--ink-soft); display:flex; gap:10px; flex-wrap:wrap;}
   .set-card .meta span{background:var(--surface-2); padding:2px 8px; border-radius:999px; font-family:'IBM Plex Mono',monospace;}
+  .set-card .meta span.solved{background:var(--pine-soft); color:var(--pine-dark); font-weight:700;}
+  .set-card .meta span.unsolved{background:var(--surface-2); color:var(--ink-soft);}
   .set-card .actions{display:flex; gap:8px; margin-top:4px;}
+
+  /* 학습 통계 화면 */
+  .stats-hero{display:flex; gap:26px; align-items:center; padding:26px 28px; margin-bottom:20px; flex-wrap:wrap;}
+  .stats-hero .gauge-wrap{flex-shrink:0;}
+  .stats-hero .stats-info .big{font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:700; color:var(--pine-dark); line-height:1;}
+  .stats-hero .stats-info .big span{font-size:16px; color:var(--ink-soft);}
+  .pass-bucket-row{display:flex; align-items:center; gap:12px; margin-bottom:10px;}
+  .pass-bucket-label{font-size:12.5px; font-weight:700; color:var(--ink-soft); width:96px; flex-shrink:0;}
+  .pass-bucket-row .bar-track{flex:1; width:auto;}
+  .pass-bucket-count{font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-soft); width:96px; text-align:right; flex-shrink:0;}
+  .badge-attempt{background:var(--slate-soft); color:var(--slate);}
 
   .upload-card{
     border:2px dashed var(--line); border-radius:var(--radius); padding:22px;
@@ -380,12 +393,14 @@ const PASS_TOTAL = 60;
 const SUBJECT_PASS_MIN = 8; // 과목별 20문항 중 8문제(40%) 미만 = 과락 -> 8개 이상 정답해야 통과
 
 let STATE = {
-  view: 'home',            // home | mode | quiz | result | wrongnote
+  view: 'home',            // home | mode | quiz | result | wrongnote | stats
   sets: [],                // index
   activeSet: null,         // full set object {id,name,questions}
   session: null,           // {mode, sourceType, list:[...], idx}
   returnSession: null,     // {session, activeSet} — 주제별 모아풀기 등으로 잠시 벗어난 원래 세션을 복귀시키기 위한 보관소
   lastResult: null,
+  resultsHistory: [],      // results_history 캐시 — 세트별 "몇 회 풀었는지" 표시에 사용
+  statsData: null,         // null | {loading:true} | {totalQ, attemptedQ, bucketCounts, perSet}
   wrongFilter: 'all',      // all | freq | bookmark
   calcModal: null,         // {steps, stepIdx}
   navModal: false,
@@ -564,8 +579,14 @@ function startAutoSync(){
 async function init(){
   const idx = await sGet('qsets_index');
   STATE.sets = idx || [];
+  await loadResultsHistory();
   render();
   startAutoSync();
+}
+
+// results_history 캐시를 (재)로드한다 — 세트별 "몇 회 풀었는지" 등에 사용.
+async function loadResultsHistory(){
+  STATE.resultsHistory = (await sGet('results_history')) || [];
 }
 
 /* ---------------------- excel parsing ---------------------- */
@@ -735,8 +756,16 @@ async function recordAnswer(setId, setName, q, isCorrect){
     options:q.options, answer:q.answer, general_explanation:q.general_explanation,
     is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url, topic:q.topic || ''
   };
-  const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
+  const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot, attemptCount:0, correctCount:0, lastAnsweredAt:null};
   cur.snapshot = snapshot;
+  // 실제로 보기를 선택하고 확인/제출한 경우에만 "풀어본 횟수"로 집계한다
+  // (실전 모드에서 안 푼 채로 제출된 문항은 오답으로는 기록되지만 풀이 횟수에는 넣지 않음).
+  const wasAnswered = (q.userAnswer !== null && q.userAnswer !== undefined);
+  if(wasAnswered){
+    cur.attemptCount = (cur.attemptCount||0) + 1;
+    cur.lastAnsweredAt = Date.now();
+    if(isCorrect) cur.correctCount = (cur.correctCount||0) + 1;
+  }
   if(isCorrect){
     if(cur.wrongCount > 0) cur.resolved = true;
   } else {
@@ -792,6 +821,7 @@ async function startSet(setId, mode){
 
 async function startWrongOnly(filterList){
   if(!filterList.length){ alert('해당 조건의 문제가 없습니다.'); return; }
+  await preloadNoteFlags();
   const list = filterList.map(n => ({
     qnum:n.snapshot.qnum, subject:n.snapshot.subject, question_text:n.snapshot.question_text,
     options:n.snapshot.options, answer:n.snapshot.answer, general_explanation:n.snapshot.general_explanation,
@@ -862,6 +892,7 @@ async function startTopicSession(topic){
   if(STATE.view === 'quiz' && STATE.session && !STATE.returnSession){
     STATE.returnSession = { session: STATE.session, activeSet: STATE.activeSet };
   }
+  await preloadNoteFlags();
   STATE.activeSet = null;
   STATE.session = { mode:'practice', sourceType:'topic', setId:null, setName:'🏷 주제: ' + topic, list, idx:0 };
   STATE.view = 'quiz';
@@ -900,6 +931,7 @@ async function startCalcSession(){
   if(STATE.view === 'quiz' && STATE.session && !STATE.returnSession){
     STATE.returnSession = { session: STATE.session, activeSet: STATE.activeSet };
   }
+  await preloadNoteFlags();
   STATE.activeSet = null;
   STATE.session = { mode:'practice', sourceType:'calc', setId:null, setName:'📐 계산문제 모아 풀기', list, idx:0 };
   STATE.view = 'quiz';
@@ -956,6 +988,7 @@ async function checkAnswer(){
   const setId = q._setId || STATE.session.setId;
   const setName = q._setName || STATE.session.setName;
   await recordAnswer(setId, setName, q, q.correct);
+  await preloadNoteFlags();
   render();
 }
 
@@ -989,6 +1022,7 @@ async function submitExam(){
     q.correct = (q.userAnswer !== null) && (q.userAnswer === q.answer);
     await recordAnswer(STATE.session.setId, STATE.session.setName, q, q.correct);
   }
+  await preloadNoteFlags();
   await finalizeResult();
 }
 
@@ -1023,6 +1057,7 @@ async function finalizeResult(){
       ts:Date.now(), setId:STATE.session.setId, setName:STATE.session.setName, mode:STATE.session.mode,
       total:list.length, score:totalCorrect, subjects, pass
     });
+    await loadResultsHistory();
   }
   STATE.view = 'result';
   STATE.session = null;
@@ -1050,7 +1085,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-20-1';
+const APP_VERSION = '2026-07-21-1';
 
 function topbar(){
   return `
@@ -1061,6 +1096,7 @@ function topbar(){
     </div>
     <div class="topbar-actions">
       ${STATE.view!=='home' ? `<button class="btn-top" data-act="home"><span class="ic">📚</span><span class="lbl">세트 목록</span></button>` : ''}
+      <button class="btn-top" data-act="openStats"><span class="ic">📊</span><span class="lbl">학습 통계</span></button>
       <button class="btn-top" data-act="wrongnote"><span class="ic">✏️</span><span class="lbl">오답노트</span></button>
       <button class="btn-top accent ${STATE.syncing?'syncing':''}" data-act="openSync"><span class="ic ${STATE.syncing?'spin':''}">🔄</span><span class="lbl">${STATE.syncing?'동기화 중…':'동기화'}</span></button>
     </div>
@@ -1074,13 +1110,20 @@ function renderView(){
     case 'quiz': return renderQuiz();
     case 'result': return renderResult();
     case 'wrongnote': return renderWrongNoteView();
+    case 'stats': return renderStats();
     default: return '';
   }
 }
 
 /* ---------------------- HOME ---------------------- */
 function renderHome(){
-  const cards = STATE.sets.map(s => `
+  const cards = STATE.sets.map(s => {
+    // 이 세트를 전체(100문항) 단위로 완주한 기록 — results_history는 isFullSet인 경우에만 저장되므로
+    // setId로 필터링한 개수가 곧 "몇 회 풀었는지"가 된다.
+    const setHistory = (STATE.resultsHistory||[]).filter(h => h.setId === s.id);
+    const solveCount = setHistory.length;
+    const lastEntry = setHistory[0]; // saveResultHistory가 unshift하므로 첫 항목이 최신
+    return `
     <div class="card set-card">
       <div class="name">${escapeHtml(s.name)}</div>
       <div class="meta">
@@ -1088,12 +1131,18 @@ function renderHome(){
         <span>계산문제 ${s.calcCount}개</span>
         <span>${new Date(s.uploadedAt).toLocaleDateString('ko-KR')}</span>
       </div>
+      <div class="meta">
+        ${solveCount>0
+          ? `<span class="solved">🔁 ${solveCount}회 완주</span><span>최근 ${lastEntry.score}/${lastEntry.total}점 · ${new Date(lastEntry.ts).toLocaleDateString('ko-KR')}</span>`
+          : `<span class="unsolved">아직 완주하지 않음</span>`}
+      </div>
       <div class="actions">
         <button class="btn btn-primary btn-sm" data-act="openMode" data-id="${s.id}">학습 시작</button>
         <button class="btn btn-danger btn-sm" data-act="deleteSet" data-id="${s.id}">삭제</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <div class="page-title">학습할 기출문제 세트를 선택하세요</div>
@@ -1323,6 +1372,7 @@ function renderQuiz(){
   const notesPromiseMark = STATE._noteFlags && STATE._noteFlags[qid(q._setId||sess.setId, q.subject, q.qnum)];
   const bookmarked = notesPromiseMark ? notesPromiseMark.bookmarked : false;
   const wrongCount = notesPromiseMark ? notesPromiseMark.wrongCount : 0;
+  const attemptCount = notesPromiseMark ? (notesPromiseMark.attemptCount||0) : 0;
 
   const options = q.options.map((opt,i) => {
     const n = i+1;
@@ -1383,6 +1433,7 @@ function renderQuiz(){
         <div class="q-index">${formatSetRound(setNameLabel)} &nbsp;·&nbsp; ${subjectLabel} &nbsp;·&nbsp; 원문제 ${q.qnum}번</div>
         <div class="q-badges">
           ${q.topic ? `<span class="badge badge-topic" data-act="startTopicFromBadge" data-topic="${escapeHtml(q.topic)}">🏷 ${escapeHtml(q.topic)}</span>` : ''}
+          ${attemptCount>0 ? `<span class="badge badge-attempt" title="이 문제를 지금까지 풀어본 횟수">🔁 이전 ${attemptCount}회 풀이</span>` : `<span class="badge badge-attempt" title="이 문제를 처음 풀어봅니다">🆕 첫 풀이</span>`}
           ${wrongCount>=3 ? `<span class="badge badge-freq">⚠ 빈번오답 ${wrongCount}회</span>` : ''}
           ${q.is_calculation ? `<span class="badge badge-calc" style="cursor:pointer;" data-act="startCalcSession" title="모든 세트의 계산 문제만 모아 풀기">📐 계산문제</span>` : ''}
           <span class="badge badge-mark ${bookmarked?'active':''}" data-act="toggleMark">${bookmarked?'★ 마킹됨':'☆ 마킹'}</span>
@@ -1574,6 +1625,131 @@ function renderResult(){
   <div style="display:flex; gap:10px; flex-wrap:wrap;">
     <button class="btn btn-primary" data-act="wrongnote">오답노트로 이동</button>
     <button class="btn" data-act="home">세트 목록으로</button>
+  </div>
+  `;
+}
+
+/* ---------------------- STATS (학습 통계 / 풀이 커버리지) ----------------------
+   등록된 모든 세트를 문항 단위로 훑어, 각 문제가 몇 회 풀렸는지(notes[id].attemptCount)를
+   집계해 "전체 커버리지"(1문항이라도 풀어본 비율)와 "회독별 커버리지"(N회 이상 풀어본 비율)를 보여준다.
+   세트별 완주 횟수는 results_history(=isFullSet 완료 기록)를 그대로 재사용한다. */
+async function openStats(){
+  STATE.view = 'stats';
+  STATE.statsData = {loading:true};
+  render();
+  STATE.statsData = await computeStatsData();
+  render();
+}
+
+async function computeStatsData(){
+  const allSets = await loadAllSetsFull();
+  const notes = await getNotes();
+  const history = (await sGet('results_history')) || [];
+  let totalQ = 0, attemptedQ = 0;
+  const passBuckets = [1,2,3,4,5]; // N회 이상 풀어본 문항 수를 각각 집계 (5는 "5회 이상")
+  const bucketCounts = {}; passBuckets.forEach(k => bucketCounts[k] = 0);
+  const perSet = [];
+
+  allSets.forEach(full => {
+    let setTotal = 0, setAttempted = 0;
+    full.questions.forEach(q => {
+      setTotal++; totalQ++;
+      const id = qid(full.id, q.subject, q.qnum);
+      const n = notes[id] ? (notes[id].attemptCount||0) : 0;
+      if(n >= 1){ attemptedQ++; setAttempted++; }
+      passBuckets.forEach(k => { if(n >= k) bucketCounts[k]++; });
+    });
+    const setHistory = history.filter(h => h.setId === full.id);
+    perSet.push({
+      id: full.id, name: full.name, total: setTotal, attempted: setAttempted,
+      completions: setHistory.length,
+      lastAt: setHistory.length ? setHistory[0].ts : null,
+      bestScore: setHistory.length ? Math.max(...setHistory.map(h=>h.score)) : null
+    });
+  });
+
+  return {totalQ, attemptedQ, bucketCounts, passBuckets, perSet};
+}
+
+function renderStats(){
+  const d = STATE.statsData;
+  if(!d || d.loading){
+    return `
+      <button class="btn btn-ghost btn-sm" data-act="home" style="margin-bottom:16px;">← 세트 목록으로</button>
+      <div class="page-title">📊 학습 통계</div>
+      <div class="empty">등록된 모든 세트를 불러와 풀이 커버리지를 계산하는 중입니다…</div>
+    `;
+  }
+  if(d.totalQ === 0){
+    return `
+      <button class="btn btn-ghost btn-sm" data-act="home" style="margin-bottom:16px;">← 세트 목록으로</button>
+      <div class="page-title">📊 학습 통계</div>
+      <div class="empty">등록된 문제 세트가 없습니다. 먼저 기출문제 세트를 업로드해주세요.</div>
+    `;
+  }
+
+  const overallPct = Math.round((d.attemptedQ / d.totalQ) * 100);
+  const gaugeR = 54, gaugeC = 2*Math.PI*gaugeR;
+  const dashOffset = gaugeC * (1 - overallPct/100);
+
+  const bucketLabels = {1:'1회독', 2:'2회독', 3:'3회독', 4:'4회독', 5:'5회독+'};
+  const bucketRows = d.passBuckets.map(k => {
+    const cnt = d.bucketCounts[k];
+    const pct = d.totalQ ? Math.round((cnt/d.totalQ)*100) : 0;
+    return `
+      <div class="pass-bucket-row">
+        <span class="pass-bucket-label">${bucketLabels[k]||(k+'회+')} 이상</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        <span class="pass-bucket-count mono">${cnt}/${d.totalQ} (${pct}%)</span>
+      </div>`;
+  }).join('');
+
+  const setRows = d.perSet.map(s => {
+    const pct = s.total ? Math.round((s.attempted/s.total)*100) : 0;
+    return `<tr>
+      <td>${escapeHtml(s.name)}</td>
+      <td>
+        <div class="bar-track" style="width:120px;">
+          <div class="bar-fill" style="width:${pct}%"></div>
+        </div>
+      </td>
+      <td class="mono">${s.attempted} / ${s.total} (${pct}%)</td>
+      <td class="mono">${s.completions>0 ? s.completions+'회' : '-'}</td>
+      <td class="mono">${s.lastAt ? new Date(s.lastAt).toLocaleDateString('ko-KR') : '-'}</td>
+      <td class="mono">${s.bestScore!==null ? s.bestScore+'/'+s.total : '-'}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <button class="btn btn-ghost btn-sm" data-act="home" style="margin-bottom:16px;">← 세트 목록으로</button>
+  <div class="page-title">📊 학습 통계</div>
+  <div class="page-sub">등록된 모든 세트(${d.perSet.length}개, 총 ${d.totalQ}문항)를 기준으로 계산한 풀이 커버리지입니다</div>
+
+  <div class="card stats-hero">
+    <div class="gauge-wrap">
+      <svg width="120" height="120" viewBox="0 0 108 108">
+        <circle cx="54" cy="54" r="${gaugeR}" fill="none" stroke="var(--surface-2)" stroke-width="10"/>
+        <circle cx="54" cy="54" r="${gaugeR}" fill="none" stroke="var(--pine)" stroke-width="10"
+          stroke-dasharray="${gaugeC}" stroke-dashoffset="${dashOffset}" stroke-linecap="round" transform="rotate(-90 54 54)"/>
+      </svg>
+    </div>
+    <div class="stats-info">
+      <div class="big mono">${overallPct}%<span> 전체 풀이 커버리지</span></div>
+      <div class="result-reason">전체 ${d.totalQ}문항 중 <b>${d.attemptedQ}문항</b>을 한 번 이상 풀어봤습니다. (한 번도 안 푼 문항: ${d.totalQ-d.attemptedQ}개)</div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:20px 24px; margin-bottom:20px;">
+    <h3 style="font-size:14px; color:var(--pine-dark); margin-bottom:14px;">회독별 커버리지 (N회 이상 풀어본 문항 비율)</h3>
+    ${bucketRows}
+  </div>
+
+  <div class="card" style="padding:20px 24px;">
+    <h3 style="font-size:14px; color:var(--pine-dark); margin-bottom:14px;">세트별 현황</h3>
+    <table class="subject-table">
+      <thead><tr><th>세트</th><th>문항 커버리지</th><th>풀어본 문항</th><th>완주 횟수</th><th>최근 완주일</th><th>최고 점수</th></tr></thead>
+      <tbody>${setRows}</tbody>
+    </table>
   </div>
   `;
 }
@@ -1770,7 +1946,11 @@ function escapeHtml(str){
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function goHome(){ STATE.view='home'; STATE.activeSet=null; STATE.session=null; STATE.returnSession=null; render(); }
+async function goHome(){
+  STATE.view='home'; STATE.activeSet=null; STATE.session=null; STATE.returnSession=null;
+  await loadResultsHistory();
+  render();
+}
 
 /* ---------------------- event binding ---------------------- */
 function bindEvents(){
@@ -1778,8 +1958,9 @@ function bindEvents(){
     el.onclick = async (e) => {
       const act = el.getAttribute('data-act');
       switch(act){
-        case 'home': goHome(); break;
+        case 'home': await goHome(); break;
         case 'wrongnote': goWrongNote(); break;
+        case 'openStats': await openStats(); break;
         case 'openUpload': openUpload(); break;
         case 'openTopicPicker': await openTopicPicker(); break;
         case 'closeTopicPicker': closeTopicPicker(); break;
