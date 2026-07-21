@@ -588,7 +588,7 @@ function mergeResultsHistory(local, remote){
 
 // 반환값: {ok, error?} — 실제 성공/실패 여부를 그대로 알려준다.
 // (예전 버전은 실패해도 콘솔에만 로그를 남기고 화면엔 항상 "성공"으로 표시되는 버그가 있었음)
-async function cloudPushNotes(){
+async function cloudPushNotesRaw(){
   const cfg = getSyncConfig();
   if(!cfg.endpoint || !cfg.code) return {ok:false, error:'동기화 코드/웹앱 주소가 설정되지 않았습니다.'};
   const notes = notesToCloudFormat(await getNotes());
@@ -612,6 +612,19 @@ async function cloudPushNotes(){
     console.error('[note-sync] push failed', e);
     return {ok:false, error: (e && e.message) || '서버에 연결할 수 없습니다. 웹앱 주소/배포 상태를 확인해주세요.'};
   }
+}
+
+// push 대기열: recordAnswer(문제 하나 풀 때마다)·완주·오답노트 화면 등 여러 곳에서 동시에
+// cloudPushNotes()를 호출할 수 있는데, 이걸 그대로 두면 서로 다른 push 요청이 거의 동시에
+// 서버로 날아가 "시트를 읽고 → 고쳐서 → 다시 쓰는" 과정이 겹치면서, 나중에 도착한(그러나 더
+// 오래된 정보를 담은) 요청이 방금 성공적으로 반영된 최신 데이터를 덮어써버리는 경합이 생길 수
+// 있다(실제로 완주기록이 서버에 정상 도착했는데도 곧바로 다시 조회하면 비어있던 버그의 원인).
+// 이를 막기 위해 이 기기에서 나가는 push는 항상 대기열에 줄을 세워 한 번에 하나씩만 실행한다.
+let __pushChain = Promise.resolve();
+function cloudPushNotes(){
+  const run = __pushChain.then(() => cloudPushNotesRaw());
+  __pushChain = run.catch(() => {}); // 실패해도 다음 push가 막히지 않도록 체인은 계속 이어감
+  return run;
 }
 
 // 반환값: {ok, error?, notes, resultsHistory} — 예전 백엔드(resultsHistory 미지원)와도 호환되도록
@@ -1211,7 +1224,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-8';
+const APP_VERSION = '2026-07-21-9';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
@@ -1959,6 +1972,12 @@ function noteSyncModalHTML(){
           문제별 풀이횟수·세트별 완주기록은 저장하지 못합니다. 아래 "코드 복사" 내용으로 Apps Script를
           업데이트하고 <b>새 버전으로 다시 배포</b>해야 완주기록·통계까지 기기 간에 동기화됩니다
           (기존에 쓰던 배포 URL은 그대로 사용 가능 — "배포 → 배포 관리 → 편집 → 새 버전"으로 갱신).
+          <br><br>
+          <b>이 버전(잠금 추가) 이전 코드를 쓰고 계셨다면 다시 한 번 업데이트가 필요합니다:</b>
+          여러 기기(또는 같은 기기에서 문제를 빠르게 풀 때 발생하는 여러 번의 자동 저장 요청)가
+          거의 동시에 서버로 데이터를 보내면, 나중에 도착한(그러나 더 오래된 정보를 담은) 요청이
+          방금 저장된 최신 완주기록을 덮어써버리는 경합이 발생할 수 있습니다. 아래 코드는 이를 막기
+          위해 <span class="mono">LockService</span>로 한 번에 하나씩만 저장하도록 처리합니다.
         </div>
         <div class="gh-field"><label>동기화 코드 (아무 기기에서나 동일하게 입력)</label>
           <input type="text" id="syncCode" placeholder="예: 내이름-2026" value="${escapeHtml(personal.code)}"></div>
@@ -2010,15 +2029,21 @@ function noteSyncModalHTML(){
   return json_({error:'unknown action'});
 }
 function doPost(e){
-  var body=JSON.parse(e.postData.contents);
-  if(!body||!body.code) return json_({error:'code required'});
-  var sheet=getSheet_(), data=sheet.getDataRange().getValues(), rowIndex=-1;
-  for(var i=1;i&lt;data.length;i++){ if(data[i][0]===body.code){ rowIndex=i+1; break; } }
-  var payload={ notes: body.notes||{}, resultsHistory: body.resultsHistory||[] };
-  var json=JSON.stringify(payload), now=new Date().toISOString();
-  if(rowIndex===-1) sheet.appendRow([body.code,json,now]);
-  else sheet.getRange(rowIndex,1,1,3).setValues([[body.code,json,now]]);
-  return json_({ok:true});
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000); // 다른 요청이 처리 중이면 최대 10초 대기 (동시 push로 인한 덮어쓰기 방지)
+  try{
+    var body=JSON.parse(e.postData.contents);
+    if(!body||!body.code) return json_({error:'code required'});
+    var sheet=getSheet_(), data=sheet.getDataRange().getValues(), rowIndex=-1;
+    for(var i=1;i&lt;data.length;i++){ if(data[i][0]===body.code){ rowIndex=i+1; break; } }
+    var payload={ notes: body.notes||{}, resultsHistory: body.resultsHistory||[] };
+    var json=JSON.stringify(payload), now=new Date().toISOString();
+    if(rowIndex===-1) sheet.appendRow([body.code,json,now]);
+    else sheet.getRange(rowIndex,1,1,3).setValues([[body.code,json,now]]);
+    return json_({ok:true});
+  } finally {
+    lock.releaseLock();
+  }
 }
 function getSheet_(){
   var ss=SpreadsheetApp.getActiveSpreadsheet(), sheet=ss.getSheetByName('ghg_notes');
