@@ -554,14 +554,19 @@ async function cloudPushNotes(){
   const notes = await getNotes();
   const resultsHistory = (await sGet('results_history')) || [];
   try{
-    const res = await fetch(cfg.endpoint, {
+    // Apps Script 웹앱은 실제 응답을 script.googleusercontent.com으로 리다이렉트하는데,
+    // 이 리다이렉트 응답에 CORS 헤더가 없어 mode:'cors'(기본값)로 POST하면 "Failed to fetch"가
+    // 발생하는 경우가 많다(GET은 이 문제를 잘 타지 않아 가져오기만 되고 올리기만 실패하는 패턴이 됨).
+    // no-cors로 보내면 응답 내용은 읽을 수 없지만 요청 자체는 서버에 정상 전달되므로,
+    // 전송 직후 별도 GET으로 실제 저장됐는지 다시 확인한다.
+    await fetch(cfg.endpoint, {
       method:'POST',
-      headers:{'Content-Type':'text/plain;charset=utf-8'}, // Apps Script CORS 프리플라이트 회피
+      mode:'no-cors',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({code: cfg.code, notes, resultsHistory})
     });
-    if(!res.ok) throw new Error('서버 응답 오류 (HTTP ' + res.status + ')');
-    const json = await res.json().catch(() => null);
-    if(json && json.error) throw new Error(json.error);
+    const verify = await cloudPullNotes();
+    if(!verify.ok) throw new Error('업로드 후 서버 확인에 실패했습니다: ' + verify.error);
     return {ok:true};
   }catch(e){
     console.error('[note-sync] push failed', e);
@@ -1165,7 +1170,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-4';
+const APP_VERSION = '2026-07-21-5';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
