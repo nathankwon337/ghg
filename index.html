@@ -593,18 +593,19 @@ async function cloudPullNotes(){
 }
 
 // 오답노트/통계/세트목록 화면에 들어올 때 호출: 클라우드와 이 기기 데이터를 병합해 양쪽에 동일하게 반영.
-function refreshSyncUI(){
-  if(STATE.view === 'wrongnote') renderWrongNoteBody();
-  else render();
+async function refreshSyncUI(){
+  if(STATE.view === 'wrongnote'){ renderWrongNoteBody(); return; }
+  if(STATE.view === 'stats'){ STATE.statsData = await computeStatsData(); render(); return; }
+  render();
 }
 async function syncNotesNow(){
   if(!isNoteSyncEnabled()) return;
   STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
-  refreshSyncUI();
+  await refreshSyncUI();
   const pull = await cloudPullNotes();
   if(!pull.ok){
     STATE.noteSyncStatus = {state:'error', message:'⚠ 동기화 실패: ' + pull.error};
-    refreshSyncUI();
+    await refreshSyncUI();
     return;
   }
   const localNotes = await getNotes();
@@ -618,12 +619,12 @@ async function syncNotesNow(){
   const push = await cloudPushNotes();
   if(!push.ok){
     STATE.noteSyncStatus = {state:'error', message:'⚠ 서버로 올리는 데 실패했습니다: ' + push.error};
-    refreshSyncUI();
+    await refreshSyncUI();
     return;
   }
   const at = markSyncSuccess();
   STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
-  refreshSyncUI();
+  await refreshSyncUI();
 }
 
 // 다른 기기와의 병합 결과를 화면에 별도 상태 표시 없이 조용히 반영할 때 쓰는 헬퍼
@@ -1170,7 +1171,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-5';
+const APP_VERSION = '2026-07-21-6';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
@@ -2141,9 +2142,9 @@ function bindEvents(){
           break;
         }
         case 'wfilter': STATE.wrongFilter = el.getAttribute('data-f'); renderWrongNoteBody(); break;
-        case 'openNoteSync': STATE.noteSyncModal = true; refreshSyncUI(); break;
-        case 'closeNoteSync': STATE.noteSyncModal = false; refreshSyncUI(); break;
-        case 'overlayCloseNoteSync': if(e.target === el){ STATE.noteSyncModal = false; refreshSyncUI(); } break;
+        case 'openNoteSync': STATE.noteSyncModal = true; await refreshSyncUI(); break;
+        case 'closeNoteSync': STATE.noteSyncModal = false; await refreshSyncUI(); break;
+        case 'overlayCloseNoteSync': if(e.target === el){ STATE.noteSyncModal = false; await refreshSyncUI(); } break;
         case 'saveNoteSync': {
           const code = (document.getElementById('syncCode')||{}).value?.trim() || '';
           const endpointInput = document.getElementById('syncEndpoint');
@@ -2152,14 +2153,14 @@ function bindEvents(){
           STATE.noteSyncModal = false;
           if(isNoteSyncEnabled()) await syncNotesNow();
           else { STATE._notesCache = await getNotes(); await loadResultsHistory(); }
-          refreshSyncUI();
+          await refreshSyncUI();
           break;
         }
         case 'clearNoteSync': {
           setSyncConfig({code:'', endpoint:''});
           STATE.noteSyncModal = false;
           STATE.noteSyncStatus = null;
-          refreshSyncUI();
+          await refreshSyncUI();
           break;
         }
         case 'syncNotesNow': await syncNotesNow(); break;
