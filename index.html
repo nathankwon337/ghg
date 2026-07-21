@@ -378,8 +378,13 @@
    Storage schema (localStorage, JSON-stringified):
      - "qsets_index"  -> [{id,name,uploadedAt,total,calcCount}]
      - "qset_<id>"    -> {id,name,uploadedAt,questions:[...]}
-     - "notes"        -> { [qid]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot} }
+     - "notes"        -> { [qid]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot,attemptCount,correctCount,lastAnsweredAt} }
      - "results_history" -> [{ts,setId,setName,mode,total,score,subjects,pass}]
+
+   클라우드 동기화(선택, ☁ 기록 동기화) 대상: "notes"(오답노트·빈번오답·마킹·문제별 풀이횟수)와
+   "results_history"(세트별 완주횟수·최근/최고 점수) 둘 다 동기화된다. "qsets_index"/"qset_<id>"
+   (문제 세트 자체)는 동기화 대상이 아니며, 세트 데이터는 기기마다 엑셀을 업로드하거나
+   "📥 문제세트 가져오기"(GitHub)로 각자 준비해야 한다.
    ========================================================================= */
 
 const SUBJECT_NAMES = {
@@ -500,8 +505,10 @@ function formatSyncTime(ts){
   return d.getFullYear()+'.'+pad(d.getMonth()+1)+'.'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());
 }
 
-// 병합 규칙: 오답횟수는 더 큰 값, 마킹은 둘 중 하나라도 켜져 있으면 유지, 최근오답시각은 더 최근 값.
+// 병합 규칙: 오답횟수·풀이횟수·정답횟수는 더 큰 값, 마킹은 둘 중 하나라도 켜져 있으면 유지, 최근시각은 더 최근 값.
 // (기기 간 충돌을 최소화하기 위한 단순 "더 큰/더 최신 값 우선" 병합 — gamify.js 캐럿 병합과 동일한 사상)
+// 주의: attemptCount(문제별 풀이 횟수)도 반드시 병합해야 한다 — 이 필드가 빠지면 동기화할 때마다
+// 풀이 횟수가 0으로 리셋되는 문제가 생긴다 (실제 보고된 버그).
 function mergeNoteSets(local, remote){
   if(!remote) return local;
   const merged = {...local};
@@ -509,30 +516,51 @@ function mergeNoteSets(local, remote){
     const r = remote[id];
     const l = merged[id];
     if(!l){ merged[id] = r; return; }
+    const lLast = Math.max(l.lastWrongAt||0, l.lastAnsweredAt||0);
+    const rLast = Math.max(r.lastWrongAt||0, r.lastAnsweredAt||0);
     merged[id] = {
       wrongCount: Math.max(l.wrongCount||0, r.wrongCount||0),
       resolved: (l.wrongCount||0) >= (r.wrongCount||0) ? l.resolved : r.resolved,
       bookmarked: !!(l.bookmarked || r.bookmarked),
       lastWrongAt: Math.max(l.lastWrongAt||0, r.lastWrongAt||0),
-      snapshot: (r.lastWrongAt||0) > (l.lastWrongAt||0) ? r.snapshot : l.snapshot
+      attemptCount: Math.max(l.attemptCount||0, r.attemptCount||0),
+      correctCount: Math.max(l.correctCount||0, r.correctCount||0),
+      lastAnsweredAt: Math.max(l.lastAnsweredAt||0, r.lastAnsweredAt||0),
+      snapshot: rLast > lLast ? r.snapshot : l.snapshot
     };
   });
   return merged;
+}
+
+// 세트별 완주 기록(results_history) 병합 — {ts, setId} 조합을 고유키로 보고 합집합을 만든 뒤
+// 최신순으로 정렬해 상위 200개만 남긴다 (한 기기당 최대 50개씩 저장되므로 여유 있게 잡음).
+function mergeResultsHistory(local, remote){
+  const list = [...(local||[])];
+  const seen = new Set(list.map(h => h.ts + '_' + h.setId));
+  (remote||[]).forEach(h => {
+    const key = h.ts + '_' + h.setId;
+    if(!seen.has(key)){ list.push(h); seen.add(key); }
+  });
+  list.sort((a,b) => b.ts - a.ts);
+  return list.slice(0, 200);
 }
 
 async function cloudPushNotes(){
   const cfg = getSyncConfig();
   if(!cfg.endpoint || !cfg.code) return;
   const notes = await getNotes();
+  const resultsHistory = (await sGet('results_history')) || [];
   try{
     await fetch(cfg.endpoint, {
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'}, // Apps Script CORS 프리플라이트 회피
-      body: JSON.stringify({code: cfg.code, notes})
+      body: JSON.stringify({code: cfg.code, notes, resultsHistory})
     });
   }catch(e){ console.error('[note-sync] push failed', e); }
 }
 
+// 반환값: {notes, resultsHistory} — 예전 백엔드(resultsHistory 미지원)와도 호환되도록
+// 필드가 없으면 빈 값으로 채운다.
 async function cloudPullNotes(){
   const cfg = getSyncConfig();
   if(!cfg.endpoint || !cfg.code) return null;
@@ -540,27 +568,49 @@ async function cloudPullNotes(){
     const res = await fetch(cfg.endpoint + '?action=get&code=' + encodeURIComponent(cfg.code));
     if(!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
-    return (json && json.found) ? json.notes : null;
+    if(!json || !json.found) return null;
+    return { notes: json.notes || {}, resultsHistory: json.resultsHistory || [] };
   }catch(e){ console.error('[note-sync] pull failed', e); return null; }
 }
 
-// 오답노트 화면에 들어올 때 한 번 호출: 클라우드와 이 기기 데이터를 병합해 양쪽에 동일하게 반영.
+// 오답노트/통계/세트목록 화면에 들어올 때 호출: 클라우드와 이 기기 데이터를 병합해 양쪽에 동일하게 반영.
 function refreshSyncUI(){
   if(STATE.view === 'wrongnote') renderWrongNoteBody();
+  else render();
 }
 async function syncNotesNow(){
   if(!isNoteSyncEnabled()) return;
   STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
   refreshSyncUI();
   const remote = await cloudPullNotes();
-  const local = await getNotes();
-  const merged = mergeNoteSets(local, remote);
-  await sSet('notes', merged);
-  STATE._notesCache = merged;
+  const localNotes = await getNotes();
+  const localHistory = (await sGet('results_history')) || [];
+  const mergedNotes = mergeNoteSets(localNotes, remote ? remote.notes : null);
+  const mergedHistory = mergeResultsHistory(localHistory, remote ? remote.resultsHistory : null);
+  await sSet('notes', mergedNotes);
+  await sSet('results_history', mergedHistory);
+  STATE._notesCache = mergedNotes;
+  STATE.resultsHistory = mergedHistory;
   await cloudPushNotes();
   const at = markSyncSuccess();
   STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
   refreshSyncUI();
+}
+
+// 다른 기기와의 병합 결과를 화면에 별도 상태 표시 없이 조용히 반영할 때 쓰는 헬퍼
+// (세트 목록/학습 통계 화면 진입 시 자동 호출 — 오답노트 화면처럼 상단에 동기화 상태 문구를 띄우진 않는다).
+async function silentSyncPullMerge(){
+  if(!isNoteSyncEnabled()) return;
+  const remote = await cloudPullNotes();
+  if(!remote) return;
+  const localNotes = await getNotes();
+  const localHistory = (await sGet('results_history')) || [];
+  const mergedNotes = mergeNoteSets(localNotes, remote.notes);
+  const mergedHistory = mergeResultsHistory(localHistory, remote.resultsHistory);
+  await sSet('notes', mergedNotes);
+  await sSet('results_history', mergedHistory);
+  STATE._notesCache = mergedNotes;
+  STATE.resultsHistory = mergedHistory;
 }
 
 // 자동 주기 동기화: 동기화가 설정되어 있고, 이 탭이 실제로 보이고 있을 때만 5분마다 조용히 동기화.
@@ -579,6 +629,9 @@ function startAutoSync(){
 async function init(){
   const idx = await sGet('qsets_index');
   STATE.sets = idx || [];
+  await loadResultsHistory();
+  render();
+  await silentSyncPullMerge();
   await loadResultsHistory();
   render();
   startAutoSync();
@@ -1058,6 +1111,7 @@ async function finalizeResult(){
       total:list.length, score:totalCorrect, subjects, pass
     });
     await loadResultsHistory();
+    if(isNoteSyncEnabled()) await cloudPushNotes(); // 완주 기록을 다음 5분 주기를 기다리지 않고 바로 클라우드에 반영
   }
   STATE.view = 'result';
   STATE.session = null;
@@ -1077,6 +1131,7 @@ function render(){
     ${STATE.navModal && STATE.session ? navModalHTML() : ''}
     ${STATE.calcModal ? calcModalHTML() : ''}
     ${STATE.topicModal ? topicModalHTML() : ''}
+    ${STATE.noteSyncModal && STATE.view!=='wrongnote' ? noteSyncModalHTML() : ''}
     <footer class="note">온실가스 관리기사 대비 개인 학습 도구 · 데이터는 이 브라우저 계정에만 저장됩니다 · build ${APP_VERSION}</footer>
   `;
   bindEvents();
@@ -1085,9 +1140,11 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-1';
+const APP_VERSION = '2026-07-21-2';
 
 function topbar(){
+  const syncOn = isNoteSyncEnabled();
+  const lastAt = getLastSyncAt();
   return `
   <div class="topbar">
     <div class="brand" onclick="goHome()" style="cursor:pointer;">
@@ -1098,7 +1155,12 @@ function topbar(){
       ${STATE.view!=='home' ? `<button class="btn-top" data-act="home"><span class="ic">📚</span><span class="lbl">세트 목록</span></button>` : ''}
       <button class="btn-top" data-act="openStats"><span class="ic">📊</span><span class="lbl">학습 통계</span></button>
       <button class="btn-top" data-act="wrongnote"><span class="ic">✏️</span><span class="lbl">오답노트</span></button>
-      <button class="btn-top accent ${STATE.syncing?'syncing':''}" data-act="openSync"><span class="ic ${STATE.syncing?'spin':''}">🔄</span><span class="lbl">${STATE.syncing?'동기화 중…':'동기화'}</span></button>
+      <button class="btn-top ${syncOn?'accent':''}" data-act="openNoteSync" title="문제별 풀이횟수·오답노트·완주기록을 다른 기기와 동기화">
+        <span class="ic">☁</span><span class="lbl">${syncOn ? '기록 동기화'+(lastAt?' · '+formatSyncTime(lastAt):'') : '기록 동기화 설정'}</span>
+      </button>
+      <button class="btn-top ${STATE.syncing?'syncing':''}" data-act="openSync" title="GitHub 저장소에서 기출문제 엑셀 파일 가져오기">
+        <span class="ic ${STATE.syncing?'spin':''}">📥</span><span class="lbl">${STATE.syncing?'가져오는 중…':'문제세트 가져오기'}</span>
+      </button>
     </div>
   </div>`;
 }
@@ -1637,6 +1699,7 @@ async function openStats(){
   STATE.view = 'stats';
   STATE.statsData = {loading:true};
   render();
+  await silentSyncPullMerge();
   STATE.statsData = await computeStatsData();
   render();
 }
@@ -1767,9 +1830,13 @@ async function goWrongNote(){
     STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
     const remote = await cloudPullNotes();
     const local = await getNotes();
-    const merged = mergeNoteSets(local, remote);
+    const localHistory = (await sGet('results_history')) || [];
+    const merged = mergeNoteSets(local, remote ? remote.notes : null);
+    const mergedHistory = mergeResultsHistory(localHistory, remote ? remote.resultsHistory : null);
     await sSet('notes', merged);
+    await sSet('results_history', mergedHistory);
     STATE._notesCache = merged;
+    STATE.resultsHistory = mergedHistory;
     const at = markSyncSuccess();
     STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
   } else {
@@ -1786,16 +1853,23 @@ function noteSyncModalHTML(){
   <div class="overlay" data-act="overlayCloseNoteSync">
     <div class="modal" data-stop="1" style="max-width:560px;">
       <div class="modal-head">
-        <h3>☁ 오답노트 클라우드 동기화</h3>
+        <h3>☁ 학습기록 클라우드 동기화</h3>
         <button class="icon-x" data-act="closeNoteSync">✕</button>
       </div>
       <div class="modal-body">
         <div class="ok-box" style="margin-bottom:14px;">
-          기본적으로 오답노트(전체 오답 · 빈번오답 · 마킹)는 이 브라우저에만 저장됩니다.
+          기본적으로 학습 기록(문제별 풀이횟수 · 오답노트 · 빈번오답 · 마킹 · 세트별 완주횟수/점수 · 학습 통계)은
+          이 브라우저에만 저장됩니다.
           ${siteDefault
-            ? '이 사이트는 클라우드 동기화 서버가 이미 설정되어 있습니다 — <b>동기화 코드</b>만 입력하면 됩니다. 다른 기기에서도 같은 코드를 넣으면 오답노트가 자동으로 합쳐져서 이어집니다.'
-            : '아래에 <b>동기화 코드</b>와 <b>웹앱 주소</b>를 한 번만 설정해두면, 다른 기기·브라우저에서 같은 코드를 넣었을 때 오답노트가 자동으로 합쳐져서 이어집니다.'}
+            ? '이 사이트는 클라우드 동기화 서버가 이미 설정되어 있습니다 — <b>동기화 코드</b>만 입력하면 됩니다. 다른 기기에서도 같은 코드를 넣으면 위 기록이 모두 자동으로 합쳐져서 이어집니다.'
+            : '아래에 <b>동기화 코드</b>와 <b>웹앱 주소</b>를 한 번만 설정해두면, 다른 기기·브라우저에서 같은 코드를 넣었을 때 위 기록이 모두 자동으로 합쳐져서 이어집니다.'}
           완전히 선택 사항이며, 비워두면 지금처럼 이 기기에만 저장됩니다.
+        </div>
+        <div class="warn-box" style="margin-bottom:14px;">
+          <b>이미 예전 버전으로 동기화를 설정해두셨다면:</b> 예전 백엔드 코드는 오답노트만 저장하고
+          문제별 풀이횟수·세트별 완주기록은 저장하지 못합니다. 아래 "코드 복사" 내용으로 Apps Script를
+          업데이트하고 <b>새 버전으로 다시 배포</b>해야 완주기록·통계까지 기기 간에 동기화됩니다
+          (기존에 쓰던 배포 URL은 그대로 사용 가능 — "배포 → 배포 관리 → 편집 → 새 버전"으로 갱신).
         </div>
         <div class="gh-field"><label>동기화 코드 (아무 기기에서나 동일하게 입력)</label>
           <input type="text" id="syncCode" placeholder="예: 내이름-2026" value="${escapeHtml(personal.code)}"></div>
@@ -1821,7 +1895,8 @@ function noteSyncModalHTML(){
           <div style="margin-top:8px; line-height:1.7;">
             1. <a href="https://sheets.google.com" target="_blank" rel="noopener">sheets.google.com</a>에서 새 스프레드시트를 만듭니다 (다른 학습 게임과 별도로 새로 만들어도 되고, 기존 시트를 재사용해도 됩니다).<br>
             2. 상단 메뉴 <b>확장 프로그램 → Apps Script</b> 클릭 → 기본 코드를 지우고, 아래 "코드 복사" 내용을 붙여넣습니다.<br>
-            3. 저장 후 <b>배포 → 새 배포 → 웹 앱</b> → 실행 계정은 "나", 액세스 권한은 "전체(Anyone)"로 설정 후 배포합니다.<br>
+            3. 저장 후 <b>배포 → 새 배포 → 웹 앱</b> → 실행 계정은 "나", 액세스 권한은 "전체(Anyone)"로 설정 후 배포합니다.
+            (예전에 이미 배포했다면 <b>배포 → 배포 관리 → 편집(연필 아이콘) → 버전: 새 버전 → 배포</b>로 코드만 갱신하면 URL은 그대로 유지됩니다.)<br>
             4. 나온 <span class="mono">.../exec</span> 주소를 위 "웹앱 주소" 칸에 붙여넣고 저장하면 끝입니다.<br>
             5. <b>여러 기기에서 매번 주소를 입력하기 번거롭다면</b>: 이 주소를 <span class="mono">ghg_config.js</span> 파일의 <span class="mono">window.GHG_CLOUD_ENDPOINT</span>에 한 번만 넣고 앱과 같은 폴더에 두면, 그 뒤로는 접속하는 모든 기기가 자동으로 이 주소를 쓰고 동기화 코드만 입력하면 됩니다.
           </div>
@@ -1829,7 +1904,19 @@ function noteSyncModalHTML(){
   var code=e.parameter.code, sheet=getSheet_();
   if(e.parameter.action==='get'){
     var row=findRow_(sheet,code);
-    return json_(row?{found:true,notes:safeParse_(row[1])}:{found:false});
+    if(!row) return json_({found:false});
+    var raw=safeParse_(row[1]) || {};
+    // 예전 버전은 이 칸에 notes 객체를 그대로 저장했으므로, notes/resultsHistory 형태가
+    // 아니면 예전 형식으로 보고 raw 전체를 notes로 취급한다 (하위 호환).
+    var notes, resultsHistory;
+    if(raw && (raw.notes || raw.resultsHistory)){
+      notes = raw.notes || {};
+      resultsHistory = raw.resultsHistory || [];
+    } else {
+      notes = raw;
+      resultsHistory = [];
+    }
+    return json_({found:true, notes:notes, resultsHistory:resultsHistory});
   }
   return json_({error:'unknown action'});
 }
@@ -1838,14 +1925,15 @@ function doPost(e){
   if(!body||!body.code) return json_({error:'code required'});
   var sheet=getSheet_(), data=sheet.getDataRange().getValues(), rowIndex=-1;
   for(var i=1;i&lt;data.length;i++){ if(data[i][0]===body.code){ rowIndex=i+1; break; } }
-  var json=JSON.stringify(body.notes||{}), now=new Date().toISOString();
+  var payload={ notes: body.notes||{}, resultsHistory: body.resultsHistory||[] };
+  var json=JSON.stringify(payload), now=new Date().toISOString();
   if(rowIndex===-1) sheet.appendRow([body.code,json,now]);
   else sheet.getRange(rowIndex,1,1,3).setValues([[body.code,json,now]]);
   return json_({ok:true});
 }
 function getSheet_(){
   var ss=SpreadsheetApp.getActiveSpreadsheet(), sheet=ss.getSheetByName('ghg_notes');
-  if(!sheet){ sheet=ss.insertSheet('ghg_notes'); sheet.appendRow(['code','notes','updatedAt']); }
+  if(!sheet){ sheet=ss.insertSheet('ghg_notes'); sheet.appendRow(['code','data','updatedAt']); }
   return sheet;
 }
 function findRow_(sheet,code){
@@ -1919,7 +2007,7 @@ function renderWrongNoteBody(){
         })()}</span>
         <button class="btn btn-sm" data-act="syncNotesNow">지금 동기화</button>
       ` : `<span class="sync-status off">이 기기에만 저장됨 · 다른 기기와 이어보려면 동기화를 설정하세요</span>`}
-      <button class="btn btn-sm btn-ghost" data-act="openNoteSync">⚙ 오답노트 동기화 설정</button>
+      <button class="btn btn-sm btn-ghost" data-act="openNoteSync">⚙ 동기화 설정</button>
     </div>
 
     <div class="filter-tabs">
@@ -1948,6 +2036,7 @@ function escapeHtml(str){
 
 async function goHome(){
   STATE.view='home'; STATE.activeSet=null; STATE.session=null; STATE.returnSession=null;
+  await silentSyncPullMerge();
   await loadResultsHistory();
   render();
 }
@@ -2008,9 +2097,9 @@ function bindEvents(){
           break;
         }
         case 'wfilter': STATE.wrongFilter = el.getAttribute('data-f'); renderWrongNoteBody(); break;
-        case 'openNoteSync': STATE.noteSyncModal = true; renderWrongNoteBody(); break;
-        case 'closeNoteSync': STATE.noteSyncModal = false; renderWrongNoteBody(); break;
-        case 'overlayCloseNoteSync': if(e.target === el){ STATE.noteSyncModal = false; renderWrongNoteBody(); } break;
+        case 'openNoteSync': STATE.noteSyncModal = true; refreshSyncUI(); break;
+        case 'closeNoteSync': STATE.noteSyncModal = false; refreshSyncUI(); break;
+        case 'overlayCloseNoteSync': if(e.target === el){ STATE.noteSyncModal = false; refreshSyncUI(); } break;
         case 'saveNoteSync': {
           const code = (document.getElementById('syncCode')||{}).value?.trim() || '';
           const endpointInput = document.getElementById('syncEndpoint');
@@ -2018,15 +2107,15 @@ function bindEvents(){
           setSyncConfig({code, endpoint});
           STATE.noteSyncModal = false;
           if(isNoteSyncEnabled()) await syncNotesNow();
-          else STATE._notesCache = await getNotes();
-          renderWrongNoteBody();
+          else { STATE._notesCache = await getNotes(); await loadResultsHistory(); }
+          refreshSyncUI();
           break;
         }
         case 'clearNoteSync': {
           setSyncConfig({code:'', endpoint:''});
           STATE.noteSyncModal = false;
           STATE.noteSyncStatus = null;
-          renderWrongNoteBody();
+          refreshSyncUI();
           break;
         }
         case 'syncNotesNow': await syncNotesNow(); break;
