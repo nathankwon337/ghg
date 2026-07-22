@@ -379,7 +379,10 @@
    Storage schema (localStorage, JSON-stringified):
      - "qsets_index"  -> [{id,name,uploadedAt,total,calcCount}]
      - "qset_<id>"    -> {id,name,uploadedAt,questions:[...]}
-     - "notes"        -> { [qid]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot,attemptCount,correctCount,lastAnsweredAt} }
+     - "notes"        -> { [nameKey::subject::qnum]: {wrongCount,resolved,bookmarked,lastWrongAt,snapshot,attemptCount,correctCount,lastAnsweredAt} }
+       (nameKey = 정규화된 세트 이름(setKey) — 2026-07-22부터 로컬ID 대신 이름을 키로 써서
+        기기 간 동기화 시 ID 변환이 필요 없도록 구조를 바꿈. 예전 로컬ID 기준 키가 남아있으면
+        init() 시점에 한 번 자동으로 이름 키로 마이그레이션된다.)
      - "results_history" -> [{ts,setId,setName,mode,total,score,subjects,pass}]
 
    클라우드 동기화(선택, ☁ 기록 동기화) 대상: "notes"(오답노트·빈번오답·마킹·문제별 풀이횟수)와
@@ -437,6 +440,59 @@ async function sSet(key, value){
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function qid(setId, subject, qnum){ return setId + '::' + subject + '::' + qnum; }
+// [2026-07-22 구조 개선] notes(문제별 풀이기록)의 저장 키를 "로컬 세트ID" 대신 처음부터
+// "정규화된 세트 이름"(setKey) 기준으로 통일한다. 예전 구조는 로컬ID로 저장해두고 클라우드
+// 동기화 시점에만 이름↔ID를 변환했는데, 이 변환이 "그 순간 이 기기에 해당 세트가 이미
+// 등록되어 있어야만" 성립하는 타이밍 의존적 구조라 여러 상황(특히 앱 최초 로드 시 STATE.sets가
+// 아직 비어있을 때 자동 동기화가 먼저 도는 경우)에서 변환이 실패해, 문제별 풀이횟수/오답노트가
+// 기기 간에 정상 동기화되지 않고 심지어 같은 문제가 여러 키로 중복 저장되는 문제가 있었다.
+// 이제는 로컬/클라우드 모두 항상 "세트 이름" 기준 키를 쓰므로 변환 자체가 필요 없다.
+function qkey(setName, subject, qnum){ return setKey(setName || '') + '::' + subject + '::' + qnum; }
+// 과거 버전에서 로컬ID 기준으로 저장된 레거시 키를 만나면, 그 노트에 들어있는 snapshot.setName을
+// 근거로 정규화된 이름 키로 자동 치환한다 (자동 복구 — 기기·시점에 의존하지 않는 안전한 방식).
+function canonicalizeNoteKey(key, note){
+  // 예전 코드의 slice(idx+1) 오프바이원 버그로 인해 클라우드에 이미 콜론이 여러 개
+  // 붙은 채(예: "2025년 2회:::1::7") 저장된 키가 남아있을 수 있으므로, 콜론 개수에
+  // 상관없이 맨 끝의 "숫자(과목)::숫자(문제번호)"를 정확히 찾아내는 방식으로 견고하게 처리한다.
+  const m = key.match(/^(.*?):+(\d+):+(\d+)$/);
+  if(!m) return key;
+  const head = m[1], subject = m[2], qnum = m[3];
+  if(/\d{4}\s*년\s*\d+\s*회/.test(head)) return head.trim() + '::' + subject + '::' + qnum; // 이미 정규화된 이름
+  const snapName = note && note.snapshot && note.snapshot.setName;
+  if(snapName) return setKey(snapName) + '::' + subject + '::' + qnum;
+  return head.trim() + '::' + subject + '::' + qnum; // 이름을 못 찾으면 head라도 정리해서 유지
+}
+// 서로 다른 키(레거시ID키 vs 이름키 등)로 중복 저장된, 사실은 같은 문제인 note 두 개를
+// "더 큰/더 최신 값 우선"으로 하나로 합친다 (mergeNoteSets의 병합 규칙과 동일).
+function mergeTwoNotes(l, r){
+  const lLast = Math.max(l.lastWrongAt||0, l.lastAnsweredAt||0);
+  const rLast = Math.max(r.lastWrongAt||0, r.lastAnsweredAt||0);
+  return {
+    wrongCount: Math.max(l.wrongCount||0, r.wrongCount||0),
+    resolved: (l.wrongCount||0) >= (r.wrongCount||0) ? l.resolved : r.resolved,
+    bookmarked: !!(l.bookmarked || r.bookmarked),
+    lastWrongAt: Math.max(l.lastWrongAt||0, r.lastWrongAt||0),
+    attemptCount: Math.max(l.attemptCount||0, r.attemptCount||0),
+    correctCount: Math.max(l.correctCount||0, r.correctCount||0),
+    lastAnsweredAt: Math.max(l.lastAnsweredAt||0, r.lastAnsweredAt||0),
+    snapshot: rLast > lLast ? r.snapshot : l.snapshot
+  };
+}
+// 최초 1회, 기존에 로컬ID 기준(또는 뒤섞인) 키로 저장되어 있던 notes를 전부 정규화된 이름
+// 키로 재정렬·중복병합한다. 이후로는 애초에 이름 키로만 저장되므로 다시 실행할 필요가 없다.
+const NOTES_KEY_MIGRATION_FLAG = 'ghg_notes_key_migrated_v1';
+async function migrateNotesKeysIfNeeded(){
+  try{ if(localStorage.getItem(NOTES_KEY_MIGRATION_FLAG) === '1') return; }catch(e){}
+  const notes = await getNotes();
+  const out = {};
+  Object.keys(notes).forEach(k => {
+    const note = notes[k];
+    const newKey = canonicalizeNoteKey(k, note);
+    out[newKey] = out[newKey] ? mergeTwoNotes(out[newKey], note) : note;
+  });
+  await sSet('notes', out);
+  try{ localStorage.setItem(NOTES_KEY_MIGRATION_FLAG, '1'); }catch(e){}
+}
 // "2025년 제2회 기출문제" -> "2025년 2회" 처럼, 세트 이름에서 연도/회차만 뽑아 문제 화면에 짧게 표시한다.
 function formatSetRound(setName){
   if(!setName) return '';
@@ -449,38 +505,19 @@ function formatSetRound(setName){
 // 내부 ID가 아니라 이 정규화된 세트 "이름"을 기준으로 같은 세트인지 판별해야 한다.
 function setKey(name){ return formatSetRound(name || '') || (name||'').trim(); }
 
-// 로컬 저장된 notes(문제별 풀이기록)를 클라우드에 올리기 전, 각 키의 "내부 세트ID" 부분을
-// 이 기기와 무관한 "세트 이름" 기반으로 바꿔준다 (다른 기기도 이 이름으로 다시 매칭할 수 있도록).
+// [2026-07-22] 로컬 notes가 이제 항상 "세트 이름" 기준 키로 저장되므로, 클라우드 형식과
+// 로컬 형식이 사실상 동일하다. 다만 혹시 남아있을 수 있는 레거시(로컬ID 기준) 키를 만나면
+// canonicalizeNoteKey로 자동 치환해, 어떤 상태의 로컬 데이터가 들어와도 항상 정규화된
+// 이름 키로 정리해서 내보내고/받아들인다. 기기 간 ID 매핑이 더 이상 필요 없으므로,
+// STATE.sets가 아직 로드되지 않은 시점(예: 앱 최초 로드 직후)에 호출되어도 항상 정확하게 동작한다.
 function notesToCloudFormat(notes){
-  const idToNameKey = {};
-  (STATE.sets||[]).forEach(s => { idToNameKey[s.id] = setKey(s.name); });
   const out = {};
-  Object.keys(notes||{}).forEach(k => {
-    const idx = k.indexOf('::');
-    if(idx === -1){ out[k] = notes[k]; return; }
-    const setPart = k.slice(0, idx);
-    const rest = k.slice(idx + 1);
-    const snapshotName = notes[k] && notes[k].snapshot && notes[k].snapshot.setName;
-    const nameKey = idToNameKey[setPart] || (snapshotName ? setKey(snapshotName) : setPart);
-    out[nameKey + '::' + rest] = notes[k];
-  });
+  Object.keys(notes||{}).forEach(k => { out[canonicalizeNoteKey(k, notes[k])] = notes[k]; });
   return out;
 }
-// 클라우드에서 받은(세트 이름 기반 키의) notes를, 이 기기의 로컬 세트ID 기반 키로 다시 변환한다.
-// 이 기기에 아직 그 이름의 세트가 없으면(엑셀 미업로드) 이름 기반 키 그대로 남겨두고,
-// 나중에 그 세트를 업로드한 뒤 다시 동기화하면 자동으로 로컬 ID와 연결된다.
 function notesFromCloudFormat(cloudNotes){
-  const nameKeyToId = {};
-  (STATE.sets||[]).forEach(s => { nameKeyToId[setKey(s.name)] = s.id; });
   const out = {};
-  Object.keys(cloudNotes||{}).forEach(k => {
-    const idx = k.indexOf('::');
-    if(idx === -1){ out[k] = cloudNotes[k]; return; }
-    const namePart = k.slice(0, idx);
-    const rest = k.slice(idx + 1);
-    const localId = nameKeyToId[namePart];
-    out[(localId || namePart) + '::' + rest] = cloudNotes[k];
-  });
+  Object.keys(cloudNotes||{}).forEach(k => { out[canonicalizeNoteKey(k, cloudNotes[k])] = cloudNotes[k]; });
   return out;
 }
 
@@ -716,6 +753,7 @@ function startAutoSync(){
 
 /* ---------------------- init ---------------------- */
 async function init(){
+  await migrateNotesKeysIfNeeded();
   const idx = await sGet('qsets_index');
   STATE.sets = idx || [];
   await loadResultsHistory();
@@ -892,7 +930,7 @@ async function getNotes(){ return (await sGet('notes')) || {}; }
 
 async function recordAnswer(setId, setName, q, isCorrect){
   const notes = await getNotes();
-  const id = qid(setId, q.subject, q.qnum);
+  const id = qkey(setName, q.subject, q.qnum);
   const snapshot = {
     setId, setName, subject:q.subject, qnum:q.qnum, question_text:q.question_text,
     options:q.options, answer:q.answer, general_explanation:q.general_explanation,
@@ -920,11 +958,12 @@ async function recordAnswer(setId, setName, q, isCorrect){
   if(isNoteSyncEnabled()) cloudPushNotes();
 }
 
-async function toggleBookmark(setId, q){
+async function toggleBookmark(setId, setName, q){
   const notes = await getNotes();
-  const id = qid(setId, q.subject, q.qnum);
+  const resolvedName = setName || (STATE.activeSet? STATE.activeSet.name : (q.setName||''));
+  const id = qkey(resolvedName, q.subject, q.qnum);
   const snapshot = {
-    setId, setName:(STATE.activeSet? STATE.activeSet.name : (q.setName||'')), subject:q.subject, qnum:q.qnum,
+    setId, setName: resolvedName, subject:q.subject, qnum:q.qnum,
     question_text:q.question_text, options:q.options, answer:q.answer,
     general_explanation:q.general_explanation, is_calculation:q.is_calculation, steps:q.steps, image_url:q.image_url,
     topic:q.topic || ''
@@ -1229,7 +1268,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-21-10';
+const APP_VERSION = '2026-07-22-1';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
@@ -1522,7 +1561,7 @@ function renderQuiz(){
   const subjectLabel = SUBJECT_NAMES[q.subject] ? `제${q.subject}과목 · ${SUBJECT_NAMES[q.subject]}` : ('과목 ' + q.subject);
   const setNameLabel = q._setName || sess.setName;
 
-  const notesPromiseMark = STATE._noteFlags && STATE._noteFlags[qid(q._setId||sess.setId, q.subject, q.qnum)];
+  const notesPromiseMark = STATE._noteFlags && STATE._noteFlags[qkey(q._setName||sess.setName, q.subject, q.qnum)];
   const bookmarked = notesPromiseMark ? notesPromiseMark.bookmarked : false;
   const wrongCount = notesPromiseMark ? notesPromiseMark.wrongCount : 0;
   const attemptCount = notesPromiseMark ? (notesPromiseMark.attemptCount||0) : 0;
@@ -1812,7 +1851,7 @@ async function computeStatsData(){
     let setTotal = 0, setAttempted = 0;
     full.questions.forEach(q => {
       setTotal++; totalQ++;
-      const id = qid(full.id, q.subject, q.qnum);
+      const id = qkey(full.name, q.subject, q.qnum);
       const n = notes[id] ? (notes[id].attemptCount||0) : 0;
       if(n >= 1){ attemptedQ++; setAttempted++; }
       passBuckets.forEach(k => { if(n >= k) bucketCounts[k]++; });
@@ -2213,7 +2252,8 @@ function bindEvents(){
         case 'toggleMark': {
           const q = currentQ();
           const setId = q._setId || STATE.session.setId;
-          await toggleBookmark(setId, q);
+          const setName = q._setName || STATE.session.setName;
+          await toggleBookmark(setId, setName, q);
           await preloadNoteFlags(setId, true);
           render();
           break;
