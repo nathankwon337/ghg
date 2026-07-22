@@ -475,6 +475,7 @@ function mergeTwoNotes(l, r){
     attemptCount: Math.max(l.attemptCount||0, r.attemptCount||0),
     correctCount: Math.max(l.correctCount||0, r.correctCount||0),
     lastAnsweredAt: Math.max(l.lastAnsweredAt||0, r.lastAnsweredAt||0),
+    markedAt: Math.max(l.markedAt||0, r.markedAt||0),
     snapshot: rLast > lLast ? r.snapshot : l.snapshot
   };
 }
@@ -599,7 +600,11 @@ function mergeResetLog(local, remote){
   return out;
 }
 function filterHistoryByResetLog(history, resetLog){
-  return (history||[]).filter(h => (h.ts||0) > (resetLog[setKey(h.setName)]||0));
+  return (history||[]).filter(h => {
+    const resetAt = resetLog[setKey(h.setName)] || 0;
+    if(resetAt <= 0) return true; // 이 세트는 초기화된 적이 없으니 그대로 유지
+    return (h.ts||0) > resetAt;
+  });
 }
 function filterNotesByResetLog(notes, resetLog){
   const out = {};
@@ -607,8 +612,9 @@ function filterNotesByResetLog(notes, resetLog){
     const note = notes[k];
     const m = k.match(/^(.*?):+(\d+):+(\d+)$/);
     const head = m ? m[1].trim() : null;
-    const ts = Math.max(note.lastAnsweredAt||0, note.lastWrongAt||0);
     const resetAt = head ? (resetLog[head]||0) : 0;
+    if(resetAt <= 0){ out[k] = note; return; } // 초기화된 적 없는 세트는 타임스탬프 유무와 상관없이 유지
+    const ts = Math.max(note.lastAnsweredAt||0, note.lastWrongAt||0, note.markedAt||0);
     if(ts > resetAt) out[k] = note;
   });
   return out;
@@ -631,6 +637,7 @@ function mergeNoteSets(local, remote){
       attemptCount: Math.max(l.attemptCount||0, r.attemptCount||0),
       correctCount: Math.max(l.correctCount||0, r.correctCount||0),
       lastAnsweredAt: Math.max(l.lastAnsweredAt||0, r.lastAnsweredAt||0),
+      markedAt: Math.max(l.markedAt||0, r.markedAt||0),
       snapshot: rLast > lLast ? r.snapshot : l.snapshot
     };
   });
@@ -1078,6 +1085,7 @@ async function toggleBookmark(setId, setName, q){
   const cur = notes[id] || {wrongCount:0, resolved:true, bookmarked:false, lastWrongAt:null, snapshot};
   cur.bookmarked = !cur.bookmarked;
   cur.snapshot = snapshot;
+  if(cur.bookmarked) cur.markedAt = Date.now(); // 답을 풀지 않고 마킹만 한 경우에도 시각을 남겨둔다
   notes[id] = cur;
   await sSet('notes', notes);
   render();
@@ -1390,7 +1398,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-22-4';
+const APP_VERSION = '2026-07-22-5';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
