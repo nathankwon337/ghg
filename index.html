@@ -657,12 +657,35 @@ async function cloudPushNotesRaw(){
 // 서버로 날아가 "시트를 읽고 → 고쳐서 → 다시 쓰는" 과정이 겹치면서, 나중에 도착한(그러나 더
 // 오래된 정보를 담은) 요청이 방금 성공적으로 반영된 최신 데이터를 덮어써버리는 경합이 생길 수
 // 있다(실제로 완주기록이 서버에 정상 도착했는데도 곧바로 다시 조회하면 비어있던 버그의 원인).
-// 이를 막기 위해 이 기기에서 나가는 push는 항상 대기열에 줄을 세워 한 번에 하나씩만 실행한다.
-let __pushChain = Promise.resolve();
+//
+// [2026-07-22] 처음엔 "겹치는 요청을 전부 순서대로 하나씩 실행"하는 방식으로 막았는데, 이러면
+// 실전모드에서 100문항을 풀고 "최종 제출"을 누를 때 recordAnswer()가 문항마다 한 번씩 push를
+// 예약해두고, 제출 시점엔 그 99~100개의 push(각각 실제 네트워크 POST+검증 GET 왕복 포함)가
+// 전부 순서대로 끝나야 화면이 넘어가서, 몇 분씩 "최종 제출" 버튼이 멈춰있는 것처럼 보이는
+// 문제가 있었다. cloudPushNotesRaw()는 호출되는 그 순간의 "최신" notes/기록을 storage에서
+// 다시 읽어오므로, 굳이 100번을 전부 실행할 필요 없이 "지금 실행 중인 것 + 그게 끝난 뒤
+// 최신 상태로 딱 한 번 더"만 실행해도 결과는 동일하다. 그래서 겹치는 호출은 실행 큐에 쌓지
+// 않고 병합(coalesce)하도록 바꿈 — 문항 100개를 풀어도 실제 네트워크 왕복은 최대 2번 정도로 끝남.
+let __pushRunning = false;
+let __pushPendingAgain = false;
+let __pushWaiters = [];
 function cloudPushNotes(){
-  const run = __pushChain.then(() => cloudPushNotesRaw());
-  __pushChain = run.catch(() => {}); // 실패해도 다음 push가 막히지 않도록 체인은 계속 이어감
-  return run;
+  return new Promise((resolve) => {
+    __pushWaiters.push(resolve);
+    if(__pushRunning){ __pushPendingAgain = true; return; }
+    __pushRunning = true;
+    (async () => {
+      let result;
+      do{
+        __pushPendingAgain = false;
+        try{ result = await cloudPushNotesRaw(); }
+        catch(e){ result = {ok:false, error:(e&&e.message)||String(e)}; }
+      } while(__pushPendingAgain);
+      __pushRunning = false;
+      const waiters = __pushWaiters; __pushWaiters = [];
+      waiters.forEach(w => w(result));
+    })();
+  });
 }
 
 // 반환값: {ok, error?, notes, resultsHistory} — 예전 백엔드(resultsHistory 미지원)와도 호환되도록
@@ -922,6 +945,29 @@ async function deleteSet(id){
   STATE.sets = STATE.sets.filter(s => s.id !== id);
   await sSet('qsets_index', STATE.sets);
   try{ localStorage.removeItem('qset_' + id); }catch(e){}
+  render();
+}
+
+// [2026-07-22 추가] "최종 제출"이 반응 없어 보여 여러 번 눌렀던 경우처럼, 완주기록·풀이횟수가
+// 비정상적으로 중복 누적된 세트를 사용자가 직접 정리할 수 있게 하는 기능. 이 세트 이름과
+// 일치하는 완주기록(results_history)과 문제별 풀이기록(notes)만 지우고, 다른 세트 데이터나
+// 세트 자체(문제 데이터)는 그대로 둔다.
+async function resetSetProgress(setName){
+  const nameKey = setKey(setName);
+  if(!confirm(`"${setName}" 세트의 완주기록·문제별 풀이기록(오답노트 포함)만 초기화합니다.\n문제 데이터는 그대로 남고, 다시 처음부터 풀어볼 수 있게 됩니다. 계속할까요?`)) return;
+  const history = (await sGet('results_history')) || [];
+  await sSet('results_history', history.filter(h => setKey(h.setName) !== nameKey));
+  const notes = await getNotes();
+  const filtered = {};
+  Object.keys(notes).forEach(k => {
+    const m = k.match(/^(.*?):+(\d+):+(\d+)$/);
+    const head = m ? m[1].trim() : k;
+    if(head !== nameKey) filtered[k] = notes[k];
+  });
+  await sSet('notes', filtered);
+  STATE.resultsHistory = await sGet('results_history') || [];
+  STATE._notesCache = filtered;
+  if(isNoteSyncEnabled()) cloudPushNotes();
   render();
 }
 
@@ -1194,21 +1240,36 @@ function calcNext(){
 }
 function closeCalcModal(){ STATE.calcModal = null; render(); }
 
+// [2026-07-22] "최종 제출"이 반응 없어 보인다고 여러 번 눌렀을 때, 예전엔 누를 때마다
+// submitExam()이 처음부터 다시 실행되어(문항별 풀이횟수·완주기록이 누른 횟수만큼 중복 저장됨)
+// "10회 완주"처럼 되어버리는 문제가 있었다. 제출이 진행 중이면 이후 클릭은 완전히 무시한다.
+let __examSubmitting = false;
 async function submitExam(){
+  if(__examSubmitting) return;
   const unanswered = STATE.session.list.filter(q => q.userAnswer === null).length;
   if(unanswered > 0){
     if(!confirm(unanswered + '개 문항이 아직 풀리지 않았습니다. 그래도 제출하시겠습니까?')) return;
   }
-  for(const q of STATE.session.list){
-    q.correct = (q.userAnswer !== null) && (q.userAnswer === q.answer);
-    await recordAnswer(STATE.session.setId, STATE.session.setName, q, q.correct);
+  __examSubmitting = true;
+  render();
+  try{
+    for(const q of STATE.session.list){
+      q.correct = (q.userAnswer !== null) && (q.userAnswer === q.answer);
+      await recordAnswer(STATE.session.setId, STATE.session.setName, q, q.correct);
+    }
+    await preloadNoteFlags();
+    await finalizeResult();
+  } finally {
+    __examSubmitting = false;
   }
-  await preloadNoteFlags();
-  await finalizeResult();
 }
 
 async function finishPracticeSet(){
-  await finalizeResult();
+  if(__examSubmitting) return;
+  __examSubmitting = true;
+  render();
+  try{ await finalizeResult(); }
+  finally{ __examSubmitting = false; }
 }
 
 async function finalizeResult(){
@@ -1268,7 +1329,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-22-1';
+const APP_VERSION = '2026-07-22-2';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
@@ -1330,6 +1391,7 @@ function renderHome(){
       </div>
       <div class="actions">
         <button class="btn btn-primary btn-sm" data-act="openMode" data-id="${s.id}">학습 시작</button>
+        ${solveCount>0 ? `<button class="btn btn-sm btn-ghost" data-act="resetProgress" data-name="${escapeHtml(s.name)}" title="완주기록·풀이횟수만 초기화 (문제 데이터는 유지)">🔄 기록 초기화</button>` : ''}
         <button class="btn btn-danger btn-sm" data-act="deleteSet" data-id="${s.id}">삭제</button>
       </div>
     </div>
@@ -1616,8 +1678,8 @@ function renderQuiz(){
       <select class="jump-select" data-act="jumpSelect" aria-label="문제 번호로 건너뛰기">${jumpOptions}</select>
       <div class="progress-track"><div class="progress-fill" style="width:${progressPct}%"></div></div>
       <button class="btn btn-ghost btn-sm navopen-btn" data-act="openNav">📊 ${answeredCount}/${total}</button>
-      ${sess.mode==='exam' ? `<button class="btn btn-primary btn-sm" data-act="submitExam">최종 제출</button>`
-                            : `<button class="btn btn-primary btn-sm" data-act="finishPractice">종료·결과</button>`}
+      ${sess.mode==='exam' ? `<button class="btn btn-primary btn-sm" data-act="submitExam" ${__examSubmitting?'disabled':''}>${__examSubmitting?'제출 중…':'최종 제출'}</button>`
+                            : `<button class="btn btn-primary btn-sm" data-act="finishPractice" ${__examSubmitting?'disabled':''}>${__examSubmitting?'처리 중…':'종료·결과'}</button>`}
     </div>
 
     <div class="card quiz-main">
@@ -2228,6 +2290,7 @@ function bindEvents(){
         case 'ghPick': await ghLoadFile(el.getAttribute('data-name'), el.getAttribute('data-url')); break;
         case 'openMode': STATE._pendingSetId = el.getAttribute('data-id'); STATE.view='mode'; render(); break;
         case 'deleteSet': deleteSet(el.getAttribute('data-id')); break;
+        case 'resetProgress': resetSetProgress(el.getAttribute('data-name')); break;
         case 'startMode': {
           const mode = el.getAttribute('data-mode');
           const id = el.getAttribute('data-id');
