@@ -4,9 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>온실가스 관리기사 학습 플랫폼</title>
+<!-- [2026-07-22] 오프라인 대응: 매니페스트/아이콘 연결 + 테마컬러 (설치형 앱처럼 동작) -->
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./appletouchicon.png">
+<link rel="icon" href="./icon192.png">
+<meta name="theme-color" content="#1F5C42">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;700;900&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- [2026-07-22] 예전엔 CDN(cdnjs.cloudflare.com)에서 받아왔는데, 이러면 브라우저가 이 파일을
+     한 번도 캐시해두지 않은 상태에서 완전히 오프라인으로 앱을 새로 열면(예: 비행기 모드) 엑셀
+     업로드 기능 자체가 아예 로드되지 않을 수 있었다. 같은 폴더에 파일로 직접 배포해서(자체 호스팅),
+     서비스워커가 이 파일도 확실하게 캐싱해 오프라인에서도 항상 쓸 수 있게 한다. -->
+<script src="./xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#F1F4F1;
@@ -836,6 +845,21 @@ function startAutoSync(){
   }, 5*60*1000); // 5분마다
 }
 
+// [2026-07-22] 오프라인(비행기 모드 등) 상태에서 문제를 풀다가 다시 온라인 상태로 돌아오면,
+// 사용자가 "지금 동기화"를 직접 누르지 않아도 자동으로 한 번 동기화되도록 한다.
+// (window의 'online' 이벤트: 브라우저가 네트워크 연결 복구를 감지하면 발생)
+function startOnlineResync(){
+  window.addEventListener('online', async () => {
+    if(!isNoteSyncEnabled()) return;
+    STATE.toast = '🌐 온라인 연결됨 — 동기화 중…';
+    render();
+    await syncNotesNow();
+    STATE.toast = STATE.noteSyncStatus && STATE.noteSyncStatus.state === 'ok' ? '✅ 동기화 완료' : '⚠ 동기화 실패 — 오답노트 화면에서 다시 시도해주세요';
+    render();
+    setTimeout(() => { STATE.toast = null; render(); }, 2600);
+  });
+}
+
 /* ---------------------- init ---------------------- */
 async function init(){
   await migrateNotesKeysIfNeeded();
@@ -847,6 +871,12 @@ async function init(){
   await loadResultsHistory();
   render();
   startAutoSync();
+  startOnlineResync();
+  // [2026-07-22] 이 앱 전용 서비스워커 등록 — 완전 오프라인 상태(비행기 모드 등)에서 앱을
+  // 새로 열어도(탭을 닫았다 다시 열어도) 화면이 뜨도록 앱 껍데기(HTML/JS)를 캐싱해둔다.
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./service-worker.js').catch(() => { /* 등록 실패해도 앱 자체는 정상 동작 */ });
+  }
 }
 
 // results_history 캐시를 (재)로드한다 — 세트별 "몇 회 풀었는지" 등에 사용.
@@ -1398,7 +1428,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-22-5';
+const APP_VERSION = '2026-07-22-6';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();

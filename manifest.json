@@ -1,0 +1,15 @@
+{
+  "name": "온실가스 관리기사 학습 플랫폼",
+  "short_name": "온실가스 학습",
+  "description": "9월 필기시험 대비 · 기출문제 트레이너",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F1F4F1",
+  "theme_color": "#1F5C42",
+  "icons": [
+    { "src": "icon192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
