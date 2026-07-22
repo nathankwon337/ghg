@@ -587,6 +587,33 @@ function formatSyncTime(ts){
 // (기기 간 충돌을 최소화하기 위한 단순 "더 큰/더 최신 값 우선" 병합 — gamify.js 캐럿 병합과 동일한 사상)
 // 주의: attemptCount(문제별 풀이 횟수)도 반드시 병합해야 한다 — 이 필드가 빠지면 동기화할 때마다
 // 풀이 횟수가 0으로 리셋되는 문제가 생긴다 (실제 보고된 버그).
+// [2026-07-22] "🔄 기록 초기화"로 지운 데이터가, 아직 그 사실을 모르는 다른 기기가 동기화할 때
+// 자기 로컬에 남아있던 옛 기록을 그대로 합쳐 넣으면서 도로 살아나는 문제가 있었다(합집합 방식
+// 병합은 "삭제"라는 개념 자체가 없어서, 어느 한쪽이라도 옛 데이터를 갖고 있으면 부활함).
+// 이를 막기 위해 "이 세트는 OOO 시각에 초기화됐다"를 별도로 기록해두고(resetLog), 병합 시
+// 그 시각보다 오래된 기록은 로컬 것이든 서버 것이든 전부 걸러내고 시작한다.
+async function getResetLog(){ return (await sGet('reset_log')) || {}; }
+function mergeResetLog(local, remote){
+  const out = {...(local||{})};
+  Object.keys(remote||{}).forEach(k => { out[k] = Math.max(out[k]||0, remote[k]||0); });
+  return out;
+}
+function filterHistoryByResetLog(history, resetLog){
+  return (history||[]).filter(h => (h.ts||0) > (resetLog[setKey(h.setName)]||0));
+}
+function filterNotesByResetLog(notes, resetLog){
+  const out = {};
+  Object.keys(notes||{}).forEach(k => {
+    const note = notes[k];
+    const m = k.match(/^(.*?):+(\d+):+(\d+)$/);
+    const head = m ? m[1].trim() : null;
+    const ts = Math.max(note.lastAnsweredAt||0, note.lastWrongAt||0);
+    const resetAt = head ? (resetLog[head]||0) : 0;
+    if(ts > resetAt) out[k] = note;
+  });
+  return out;
+}
+
 function mergeNoteSets(local, remote){
   if(!remote) return local;
   const merged = {...local};
@@ -641,6 +668,7 @@ async function cloudPushNotesRaw(){
   if(!cfg.endpoint || !cfg.code) return {ok:false, error:'동기화 코드/웹앱 주소가 설정되지 않았습니다.'};
   const notes = notesToCloudFormat(await getNotes());
   const resultsHistory = (await sGet('results_history')) || [];
+  const resetLog = await getResetLog();
   try{
     // Apps Script 웹앱은 실제 응답을 script.googleusercontent.com으로 리다이렉트하는데,
     // 이 리다이렉트 응답에 CORS 헤더가 없어 mode:'cors'(기본값)로 POST하면 "Failed to fetch"가
@@ -652,7 +680,7 @@ async function cloudPushNotesRaw(){
       mode:'no-cors',
       cache:'no-store',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({code: cfg.code, notes, resultsHistory})
+      body: JSON.stringify({code: cfg.code, notes, resultsHistory, resetLog})
     }, 20000);
     const verify = await cloudPullNotes();
     if(!verify.ok) throw new Error('업로드 후 서버 확인에 실패했습니다: ' + verify.error);
@@ -714,8 +742,8 @@ async function cloudPullNotes(){
     if(!res.ok) throw new Error('서버 응답 오류 (HTTP ' + res.status + ')');
     const json = await res.json();
     if(json && json.error) throw new Error(json.error);
-    if(!json || !json.found) return {ok:true, notes:{}, resultsHistory:[]};
-    return {ok:true, notes: json.notes || {}, resultsHistory: json.resultsHistory || []};
+    if(!json || !json.found) return {ok:true, notes:{}, resultsHistory:[], resetLog:{}};
+    return {ok:true, notes: json.notes || {}, resultsHistory: json.resultsHistory || [], resetLog: json.resetLog || {}};
   }catch(e){
     console.error('[note-sync] pull failed', e);
     const timedOut = e && e.name === 'AbortError';
@@ -729,6 +757,34 @@ async function refreshSyncUI(){
   if(STATE.view === 'stats'){ STATE.statsData = await computeStatsData(); render(); return; }
   render();
 }
+// pull로 받아온 서버 데이터를 로컬과 병합해 저장까지 마치는 공통 로직.
+// resetLog(삭제 시각 기록)를 먼저 병합한 뒤, 그 시각보다 오래된 기록은 로컬/원격 양쪽에서
+// 전부 걸러내고 나서 합집합 병합을 하므로, "기록 초기화" 이후 뒤늦게 동기화하는 기기가 자기
+// 로컬의 옛 기록으로 삭제된 데이터를 되살리는 일이 없다.
+async function applyPulledSync(pull){
+  const localResetLog = await getResetLog();
+  const mergedResetLog = mergeResetLog(localResetLog, pull.resetLog);
+  await sSet('reset_log', mergedResetLog);
+
+  const localNotesRaw = await getNotes();
+  const localHistoryRaw = (await sGet('results_history')) || [];
+  const remoteNotesRaw = notesFromCloudFormat(pull.notes);
+  const remoteHistoryRaw = pull.resultsHistory;
+
+  const localNotes = filterNotesByResetLog(localNotesRaw, mergedResetLog);
+  const remoteNotes = filterNotesByResetLog(remoteNotesRaw, mergedResetLog);
+  const localHistory = filterHistoryByResetLog(localHistoryRaw, mergedResetLog);
+  const remoteHistory = filterHistoryByResetLog(remoteHistoryRaw, mergedResetLog);
+
+  const mergedNotes = mergeNoteSets(localNotes, remoteNotes);
+  const mergedHistory = mergeResultsHistory(localHistory, remoteHistory);
+  await sSet('notes', mergedNotes);
+  await sSet('results_history', mergedHistory);
+  STATE._notesCache = mergedNotes;
+  STATE.resultsHistory = mergedHistory;
+  return {mergedNotes, mergedHistory};
+}
+
 async function syncNotesNow(){
   if(!isNoteSyncEnabled()) return;
   STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
@@ -739,14 +795,7 @@ async function syncNotesNow(){
     await refreshSyncUI();
     return;
   }
-  const localNotes = await getNotes();
-  const localHistory = (await sGet('results_history')) || [];
-  const mergedNotes = mergeNoteSets(localNotes, notesFromCloudFormat(pull.notes));
-  const mergedHistory = mergeResultsHistory(localHistory, pull.resultsHistory);
-  await sSet('notes', mergedNotes);
-  await sSet('results_history', mergedHistory);
-  STATE._notesCache = mergedNotes;
-  STATE.resultsHistory = mergedHistory;
+  await applyPulledSync(pull);
   const push = await cloudPushNotes();
   if(!push.ok){
     STATE.noteSyncStatus = {state:'error', message:'⚠ 서버로 올리는 데 실패했습니다: ' + push.error};
@@ -765,14 +814,7 @@ async function silentSyncPullMerge(){
   if(!isNoteSyncEnabled()) return;
   const remote = await cloudPullNotes();
   if(!remote.ok){ STATE.noteSyncStatus = {state:'error', message:'⚠ 동기화 실패: ' + remote.error}; return; }
-  const localNotes = await getNotes();
-  const localHistory = (await sGet('results_history')) || [];
-  const mergedNotes = mergeNoteSets(localNotes, notesFromCloudFormat(remote.notes));
-  const mergedHistory = mergeResultsHistory(localHistory, remote.resultsHistory);
-  await sSet('notes', mergedNotes);
-  await sSet('results_history', mergedHistory);
-  STATE._notesCache = mergedNotes;
-  STATE.resultsHistory = mergedHistory;
+  await applyPulledSync(remote);
 }
 
 // 자동 주기 동기화: 동기화가 설정되어 있고, 이 탭이 실제로 보이고 있을 때만 5분마다 조용히 동기화.
@@ -978,6 +1020,12 @@ async function resetSetProgress(setName){
     if(head !== nameKey) filtered[k] = notes[k];
   });
   await sSet('notes', filtered);
+  // 이 세트를 "지금" 초기화했다는 사실을 기록해둔다 — 이렇게 해야, 아직 이 사실을 모르는
+  // 다른 기기가 나중에 동기화할 때 자기 로컬에 남아있는 (초기화 이전) 옛 기록으로 이걸
+  // 되살리지 않고, 오히려 그 옛 기록 쪽을 걸러내게 된다.
+  const resetLog = await getResetLog();
+  resetLog[nameKey] = Date.now();
+  await sSet('reset_log', resetLog);
   STATE.resultsHistory = await sGet('results_history') || [];
   STATE._notesCache = filtered;
   if(isNoteSyncEnabled()) cloudPushNotes();
@@ -1342,7 +1390,7 @@ function render(){
 /* 배포/캐시 확인용 버전 표시. 파일을 새로 받았는데도 이 값이 그대로면
    브라우저 캐시나 배포가 아직 갱신되지 않은 것이니 새로고침(Ctrl/Cmd+Shift+R)
    또는 재배포를 확인해보세요. */
-const APP_VERSION = '2026-07-22-3';
+const APP_VERSION = '2026-07-22-4';
 
 function topbar(){
   const syncOn = isNoteSyncEnabled();
@@ -2039,14 +2087,7 @@ async function goWrongNote(){
     STATE.noteSyncStatus = {state:'syncing', message:'동기화 중…'};
     const remote = await cloudPullNotes();
     if(remote.ok){
-      const local = await getNotes();
-      const localHistory = (await sGet('results_history')) || [];
-      const merged = mergeNoteSets(local, notesFromCloudFormat(remote.notes));
-      const mergedHistory = mergeResultsHistory(localHistory, remote.resultsHistory);
-      await sSet('notes', merged);
-      await sSet('results_history', mergedHistory);
-      STATE._notesCache = merged;
-      STATE.resultsHistory = mergedHistory;
+      await applyPulledSync(remote);
       const at = markSyncSuccess();
       STATE.noteSyncStatus = {state:'ok', message:'동기화 완료', at};
     } else {
